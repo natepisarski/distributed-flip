@@ -2,6 +2,7 @@ import React, {useState, useEffect, useRef} from 'react';
 import logo from './logo.svg';
 import './App.css';
 import {List} from "./components/List";
+import { formatDistance } from "date-fns";
 
 interface CandidateItem {
     uuid: string;
@@ -33,7 +34,14 @@ const App = () => {
         listEndRef.current?.scrollIntoView({behavior: "smooth"});
     }, [logs]);
 
+    const targetUtcDatetime = '2025-12-10T11:31:00Z';
     const date = '2025-01-01 12:00:00';
+
+    const targetDatetimeTooltip = new Date(targetUtcDatetime).toLocaleString();
+    const targetDatetimeDisplayText = formatDistance(targetUtcDatetime, new Date());
+
+    // const targetDatetimeTooltip = 'a';
+    // const targetDatetimeDisplayText = 'b';
 
     return (
         // 1. OUTER CONTAINER: Takes up full viewport height (h-screen)
@@ -51,7 +59,9 @@ const App = () => {
                             <p className={'text-white font-bold text-xl'}>List Selector</p>
                         </div>
                         <div className={'flex flex-row text-gray-300 text-xl'}>
-                            <p>A random item will be chosen at {date}</p>
+                            <span>
+                                A random item will be chosen in <span className={'text-green-500 cursor-pointer hover:text-green-600'} title={targetDatetimeTooltip}>{targetDatetimeDisplayText}</span>.
+                            </span>
                         </div>
                     </div>
                 </div>
