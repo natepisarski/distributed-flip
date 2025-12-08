@@ -5,9 +5,9 @@ import './App.css';
 function App() {
   return (
     <div className="App">
-      <header className="App-header">
+      <header className="App-header bg-red-500">
         <img src={logo} className="App-logo" alt="logo" />
-        <p>
+        <p className={'bg-blue-300'}>
           Edit <code>src/App.tsx</code> and save to reload.
         </p>
         <a
