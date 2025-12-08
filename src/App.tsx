@@ -4,7 +4,7 @@ import './App.css';
 import {List} from "./components/List";
 import { formatDistance } from "date-fns";
 
-interface CandidateItem {
+export interface CandidateItem {
     uuid: string;
     text: string;
 }
@@ -19,15 +19,14 @@ const App = () => {
         {uuid: crypto.randomUUID(), text: "Third Option"},
     ]);
 
-    // Ref to auto-scroll the list to the bottom
-    const listEndRef = useRef<HTMLDivElement>(null);
-
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' && inputValue.trim()) {
             setLogs([...logs, {uuid: Date.now().toString(), text: inputValue}]);
             setInputValue("");
         }
     };
+
+    const listEndRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll effect
     useEffect(() => {
@@ -66,23 +65,7 @@ const App = () => {
                     </div>
                 </div>
 
-                <div className="bg-gray-800 border border-gray-700 rounded-lg p-2 h-64 overflow-y-auto shadow-xl">
-                    {logs.length === 0 ? (
-                        <p className="text-gray-500 italic">No activity yet.</p>
-                    ) : (
-                        <ul className="space-y-2">
-                            {logs.map((log) => (
-                                <li key={log.uuid}
-                                    className="text-gray-300 font-mono text-sm border-b border-gray-700/50 pb-1 last:border-0">
-                                    <span className="text-green-500 mr-2">➜</span>
-                                    {log.text}
-                                </li>
-                            ))}
-                            {/* Invisible element to anchor scroll to bottom */}
-                            <div ref={listEndRef}/>
-                        </ul>
-                    )}
-                </div>
+                <List candidates={logs} listEndRef={listEndRef} />
 
                 {/* 4. INPUT BOX: The "Interaction" area */}
                 <div className="relative">
