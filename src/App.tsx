@@ -39,8 +39,9 @@ const App = () => {
     const targetDatetimeTooltip = new Date(targetUtcDatetime).toLocaleString();
     const targetDatetimeDisplayText = formatDistance(targetUtcDatetime, new Date());
 
-    // const targetDatetimeTooltip = 'a';
-    // const targetDatetimeDisplayText = 'b';
+    const onRemove = (uuid: string)  => {
+        setLogs(logs.filter(log => log.uuid !== uuid));
+    }
 
     return (
         // 1. OUTER CONTAINER: Takes up full viewport height (h-screen)
@@ -65,7 +66,11 @@ const App = () => {
                     </div>
                 </div>
 
-                <List candidates={logs} listEndRef={listEndRef} />
+                <List
+                    candidates={logs}
+                    listEndRef={listEndRef}
+                    onRemove={onRemove}
+                />
 
                 {/* 4. INPUT BOX: The "Interaction" area */}
                 <div className="relative">
