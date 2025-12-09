@@ -2,18 +2,20 @@ import React, {useState, useEffect, useRef} from 'react';
 import logo from './logo.svg';
 import './App.css';
 import {List} from "./components/List";
-import { formatDistance } from "date-fns";
+import {formatDistance} from "date-fns";
 
 export interface CandidateItem {
     uuid: string;
     text: string;
 }
 
+const MAX_CANDIDATES = 4;
+
 const App = () => {
     const [inputValue, setInputValue] = useState<string>("");
 
     // Sample data for the list box
-    const [logs, setLogs] = useState<CandidateItem[]>([
+    const [candidates, setCandidates] = useState<CandidateItem[]>([
         {uuid: crypto.randomUUID(), text: "First Option"},
         {uuid: crypto.randomUUID(), text: "Second Option"},
         {uuid: crypto.randomUUID(), text: "Third Option"},
@@ -21,7 +23,14 @@ const App = () => {
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' && inputValue.trim()) {
-            setLogs([...logs, {uuid: Date.now().toString(), text: inputValue}]);
+            setCandidates([
+                    ...candidates,
+                    {
+                        uuid: crypto.randomUUID(),
+                        text: inputValue
+                    }
+                ]
+            );
             setInputValue("");
         }
     };
@@ -31,18 +40,24 @@ const App = () => {
     // Auto-scroll effect
     useEffect(() => {
         listEndRef.current?.scrollIntoView({behavior: "smooth"});
-    }, [logs]);
+    }, [candidates]);
 
     const targetUtcDatetime = '2025-12-10T11:31:00Z';
-    const date = '2025-01-01 12:00:00';
 
     const targetDatetimeTooltip = new Date(targetUtcDatetime).toLocaleString();
     const targetDatetimeDisplayText = formatDistance(targetUtcDatetime, new Date());
 
-    const onRemove = (uuid: string)  => {
-        setLogs(logs.filter(log => log.uuid !== uuid));
+    const onRemove = (uuid: string) => {
+        setCandidates(candidates.filter(log => log.uuid !== uuid));
     }
 
+    // const remaining = candidates.length;
+    const atMaxCandidates = candidates.length >= MAX_CANDIDATES;
+
+    const disabledClasses = atMaxCandidates
+        ? 'opacity-50 cursor-not-allowed'
+        : '';
+    
     return (
         // 1. OUTER CONTAINER: Takes up full viewport height (h-screen)
         // We use flex + justify-center + items-center to perfectly center the inner content
@@ -60,28 +75,30 @@ const App = () => {
                         </div>
                         <div className={'flex flex-row text-gray-300 text-xl'}>
                             <span>
-                                A random item will be chosen in <span className={'text-green-500 cursor-pointer hover:text-green-600'} title={targetDatetimeTooltip}>{targetDatetimeDisplayText}</span>.
+                                A random item will be chosen in <span
+                                className={'text-green-500 cursor-pointer hover:text-green-600'}
+                                title={targetDatetimeTooltip}>{targetDatetimeDisplayText}</span>.
                             </span>
                         </div>
                     </div>
                 </div>
 
                 <List
-                    candidates={logs}
+                    candidates={candidates}
                     listEndRef={listEndRef}
                     onRemove={onRemove}
                 />
 
-                {/* 4. INPUT BOX: The "Interaction" area */}
                 <div className="relative">
                     <input
                         type="text"
-                        className="w-full bg-gray-800 text-white text-xl p-4 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-lg transition-all"
-                        placeholder="Enter command..."
+                        className={`w-full bg-gray-800 text-white text-xl p-4 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-lg transition-all ${disabledClasses}`}
+                        placeholder={`Add Item (${candidates.length} / ${MAX_CANDIDATES})`}
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={handleKeyDown}
                         autoFocus
+                        disabled={atMaxCandidates}
                     />
                     <div
                         className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm hidden sm:block">
