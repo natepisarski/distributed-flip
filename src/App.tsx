@@ -5,6 +5,7 @@ import {List} from "./components/List";
 import {formatDistance} from "date-fns";
 import brotliPromise from 'brotli-wasm';
 import {compress} from "./business/compression-restore";
+import {ShareLink} from "./components/ShareLink";
 
 export interface CandidateItem {
     uuid: string;
@@ -19,6 +20,11 @@ export type BrotliInstance = {
 };
 
 const App = () => {
+    const targetUtcDatetime = '2025-12-10T11:31:00Z';
+    const targetDatetimeTooltip = new Date(targetUtcDatetime).toLocaleString();
+    const targetDatetimeDisplayText = formatDistance(targetUtcDatetime, new Date());
+    const targetDatetimeDate = new Date(targetUtcDatetime);
+
     const [inputValue, setInputValue] = useState<string>("");
 
     // Sample data for the list box
@@ -64,11 +70,6 @@ const App = () => {
         return <div>Loading compression module...</div>;
     }
 
-    const targetUtcDatetime = '2025-12-10T11:31:00Z';
-
-    const targetDatetimeTooltip = new Date(targetUtcDatetime).toLocaleString();
-    const targetDatetimeDisplayText = formatDistance(targetUtcDatetime, new Date());
-
     const onRemove = (uuid: string) => {
         setCandidates(candidates.filter(log => log.uuid !== uuid));
     }
@@ -84,7 +85,7 @@ const App = () => {
 
     return (
         <div className="min-h-screen w-full bg-gray-900 flex flex-col justify-center items-center p-4">
-            <div className="w-full max-w-2xl flex flex-col gap-2">
+            <div className="w-full max-w-6xl flex flex-col gap-2">
                 <div className={'flex flex-row w-full items-center justify-center'}>
                     <h1 className="text-4xl font-bold text-white text-center tracking-wider">
                         Distributed Flipper
@@ -128,6 +129,7 @@ const App = () => {
                     </div>
                 </div>
 
+                <ShareLink brotli={brotli} candidates={candidates} targetDatetime={targetDatetimeDate} />
 
                 <div className={'bg-black text-green-300'}>
                     {compressedText}
