@@ -29,7 +29,7 @@ export const ShareLink = ({brotli, candidates, targetDatetime}: ShareLinkProps) 
     return <div className="mt-4 p-4 bg-gray-800 border border-gray-700 rounded-lg shadow-lg">
         <p className="text-white mb-2 font-bold">Shareable Link</p>
         <div className={'flex flex-row'}>
-            <div className={'flex flex-col w-11/12'}>
+            <div className={'flex flex-col w-11/12 items-center'}>
                 <input
                     type="text"
                     readOnly
@@ -38,12 +38,12 @@ export const ShareLink = ({brotli, candidates, targetDatetime}: ShareLinkProps) 
                     onFocus={(e) => e.target.select()}
                 />
             </div>
-            <div className={'flex flex-col'}>
+            <div className={'flex flex-col items-center mx-4 my-2'}>
                 <button
-                    className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     onClick={onCopyClick}
                 >
-                    Copy to Clipboard
+                    Copy
                 </button>
             </div>
         </div>
