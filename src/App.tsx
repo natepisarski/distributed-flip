@@ -4,7 +4,7 @@ import './App.css';
 import {List} from "./components/List";
 import {formatDistance} from "date-fns";
 import brotliPromise from 'brotli-wasm';
-import {compress} from "./business/compression-restore";
+import {compress, restore} from "./business/compression-restore";
 import {ShareLink} from "./components/ShareLink";
 
 export interface CandidateItem {
@@ -20,7 +20,11 @@ export type BrotliInstance = {
 };
 
 const App = () => {
-    const targetUtcDatetime = '2025-12-10T11:31:00Z';
+    // If the querystring contains the 'p' parameter with compressed data, we restore it here.
+    const compressedParam = new URLSearchParams(window.location.search).get('p');
+
+    const defaultTargetUtcDatetime = new Date(Date.now() + 60 * 60 * 1000); // 1 hour in the future
+    const [targetUtcDatetime, setTargetUtcDatetime] = useState<string>(defaultTargetUtcDatetime.toISOString());
     const targetDatetimeTooltip = new Date(targetUtcDatetime).toLocaleString();
     const targetDatetimeDisplayText = formatDistance(targetUtcDatetime, new Date());
     const targetDatetimeDate = new Date(targetUtcDatetime);
@@ -66,9 +70,13 @@ const App = () => {
         loadBrotli();
     }, []);
 
-    if (! brotli) {
-        return <div>Loading compression module...</div>;
-    }
+    useEffect(() => {
+        if (brotli && compressedParam) {
+            const restoration = restore(brotli, window.location.search)
+            setTargetUtcDatetime(restoration.targetDatetime);
+            setCandidates(restoration.candidates);
+        }
+    }, [brotli, compressedParam]);
 
     const onRemove = (uuid: string) => {
         setCandidates(candidates.filter(log => log.uuid !== uuid));
@@ -81,7 +89,9 @@ const App = () => {
         ? 'opacity-50 cursor-not-allowed'
         : '';
 
-    const compressedText = compress(brotli, new Date(targetUtcDatetime), candidates);
+    if (! brotli) {
+        return <div>Loading compression module...</div>;
+    }
 
     return (
         <div className="min-h-screen w-full bg-gray-900 flex flex-col justify-center items-center p-4">
@@ -130,11 +140,6 @@ const App = () => {
                 </div>
 
                 <ShareLink brotli={brotli} candidates={candidates} targetDatetime={targetDatetimeDate} />
-
-                <div className={'bg-black text-green-300'}>
-                    {compressedText}
-                </div>
-
             </div>
         </div>
     );

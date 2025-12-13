@@ -10,7 +10,7 @@ export interface ListProps {
 export const List = ({candidates, listEndRef, onRemove}: ListProps) => {
     return <div className="bg-gray-800 border border-gray-700 rounded-lg p-2 h-64 overflow-y-auto shadow-xl">
         {candidates.length === 0 ? (
-            <p className="text-gray-500 italic">No activity yet.</p>
+            <p className="text-gray-500 italic">No items yet</p>
         ) : (
             <ul className="space-y-2">
                 {candidates.map((option : CandidateItem) => (

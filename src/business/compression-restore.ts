@@ -1,5 +1,11 @@
 import {BrotliInstance, CandidateItem} from "../App";
 
+export interface CompressionRestoration
+{
+    candidates: Array<CandidateItem>;
+    targetDatetime: string;
+}
+
 /**
  * Given the compressed data string, we restore the original list of CandidateItems. The data string is a base64-encoded
  * Brotli-compressed JSON object with the following format:
@@ -10,7 +16,7 @@ import {BrotliInstance, CandidateItem} from "../App";
  * @param brotli
  * @param data
  */
-export const restore = (brotli: BrotliInstance, data: string, ): Array<CandidateItem> => {
+export const restore = (brotli: BrotliInstance, data: string): CompressionRestoration => {
     // Decode the brotli-compressed string
     const compressedBuffer = Buffer.from(data, 'base64');
     const decompressedBuffer = brotli.decompress(compressedBuffer);
@@ -26,7 +32,11 @@ export const restore = (brotli: BrotliInstance, data: string, ): Array<Candidate
         text: text
     }));
 
-    return candidates;
+
+    return {
+        candidates,
+        targetDatetime: payload.t
+    };
 }
 
 /**
