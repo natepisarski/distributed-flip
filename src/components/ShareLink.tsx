@@ -1,5 +1,6 @@
 import {BrotliInstance, CandidateItem} from "../App";
 import {compress} from "../business/compression-restore";
+import React, {useState} from "react";
 
 interface ShareLinkProps {
     candidates: CandidateItem[];
@@ -20,32 +21,47 @@ export const ShareLink = ({brotli, candidates, targetDatetime}: ShareLinkProps) 
 
     const linkText = `${window.location.origin}/${queryString}`;
 
+    const [copied, setCopied] = useState(false);
+
     const onCopyClick = () => {
         console.debug(`Copied to Clipboard: ${linkText}`);
 
         navigator.clipboard.writeText(linkText);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
     }
 
-    return <div className="mt-4 p-4 bg-gray-800 border border-gray-700 rounded-lg shadow-lg">
-        <p className="text-white mb-2 font-bold">Shareable Link</p>
-        <div className={'flex flex-row'}>
-            <div className={'flex flex-col w-11/12 items-center'}>
+    const copiedClasses = ` w-32 px-4 py-2 rounded-lg transition-colors ${copied ? 'bg-green-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`;
+    const copiedEmoji = copied ? "✔️" : "📋";
+    const copiedText = copied ? "Copied!" : "Copy";
+
+    return (
+        <div className="mt-4 p-4 bg-gray-800 border border-gray-700 rounded-lg shadow-lg">
+            <p className="text-white mb-2 font-bold">Shareable Link</p>
+
+            <div className="flex flex-row w-full items-center gap-4">
+
+                {/* Input grows to fill available space */}
                 <input
                     type="text"
                     readOnly
                     value={linkText}
-                    className="w-full bg-gray-900 text-white p-2 rounded-lg font-mono text-sm"
+                    className="flex-grow bg-gray-900 text-white p-2 rounded-lg font-mono text-sm"
                     onFocus={(e) => e.target.select()}
                 />
-            </div>
-            <div className={'flex flex-col items-center mx-4 my-2'}>
-                <button
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    onClick={onCopyClick}
-                >
-                    Copy
+
+                {/* Button sits naturally on the right */}
+                <button className={copiedClasses} onClick={onCopyClick}>
+                    <div className={'flex flex-row'}>
+                        <div className={'flex flex-col'}>
+                            {copiedEmoji}
+                        </div>
+                        <div className={'flex flex-col justify-center w-full'}>
+                            {copiedText}
+                        </div>
+                    </div>
                 </button>
             </div>
         </div>
-    </div>;
+    );
 }
