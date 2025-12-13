@@ -3,6 +3,7 @@ import logo from './logo.svg';
 import './App.css';
 import {List} from "./components/List";
 import {formatDistance} from "date-fns";
+import brotliPromise from 'brotli-wasm';
 
 export interface CandidateItem {
     uuid: string;
@@ -10,6 +11,10 @@ export interface CandidateItem {
 }
 
 const MAX_CANDIDATES = 4;
+
+type BrotliInstance = {
+    compress: (buf: Uint8Array, options?: any) => Uint8Array;
+};
 
 const App = () => {
     const [inputValue, setInputValue] = useState<string>("");
@@ -42,6 +47,21 @@ const App = () => {
         listEndRef.current?.scrollIntoView({behavior: "smooth"});
     }, [candidates]);
 
+    const [brotli, setBrotli] = useState<BrotliInstance | null>(null);
+
+    useEffect(() => {
+        const loadBrotli = async () => {
+            const instance = await brotliPromise;
+            setBrotli(instance);
+        };
+
+        loadBrotli();
+    }, []);
+
+    if (! brotli) {
+        return <div>Loading compression module...</div>;
+    }
+
     const targetUtcDatetime = '2025-12-10T11:31:00Z';
 
     const targetDatetimeTooltip = new Date(targetUtcDatetime).toLocaleString();
@@ -57,7 +77,11 @@ const App = () => {
     const disabledClasses = atMaxCandidates
         ? 'opacity-50 cursor-not-allowed'
         : '';
-    
+
+    const data = JSON.stringify({targetUtcDatetime, candidates});
+    console.debug(data);
+    const compressedText = brotli.compress(Buffer.from(data), { quality: 20 });
+
     return (
         // 1. OUTER CONTAINER: Takes up full viewport height (h-screen)
         // We use flex + justify-center + items-center to perfectly center the inner content
@@ -104,6 +128,11 @@ const App = () => {
                         className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm hidden sm:block">
                         Press Enter ↵
                     </div>
+                </div>
+
+
+                <div className={'bg-black text-green-300'}>
+                    {compressedText}
                 </div>
 
             </div>
