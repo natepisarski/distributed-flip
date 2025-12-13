@@ -4,6 +4,7 @@ import './App.css';
 import {List} from "./components/List";
 import {formatDistance} from "date-fns";
 import brotliPromise from 'brotli-wasm';
+import {compress} from "./business/compression-restore";
 
 export interface CandidateItem {
     uuid: string;
@@ -12,8 +13,9 @@ export interface CandidateItem {
 
 const MAX_CANDIDATES = 4;
 
-type BrotliInstance = {
+export type BrotliInstance = {
     compress: (buf: Uint8Array, options?: any) => Uint8Array;
+    decompress: (buf: Uint8Array) => Uint8Array;
 };
 
 const App = () => {
@@ -78,13 +80,9 @@ const App = () => {
         ? 'opacity-50 cursor-not-allowed'
         : '';
 
-    const data = JSON.stringify({targetUtcDatetime, candidates});
-    console.debug(data);
-    const compressedText = brotli.compress(Buffer.from(data), { quality: 20 });
+    const compressedText = compress(brotli, new Date(targetUtcDatetime), candidates);
 
     return (
-        // 1. OUTER CONTAINER: Takes up full viewport height (h-screen)
-        // We use flex + justify-center + items-center to perfectly center the inner content
         <div className="min-h-screen w-full bg-gray-900 flex flex-col justify-center items-center p-4">
             <div className="w-full max-w-2xl flex flex-col gap-2">
                 <div className={'flex flex-row w-full items-center justify-center'}>
