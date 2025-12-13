@@ -17,6 +17,10 @@ export interface CompressionRestoration
  * @param data
  */
 export const restore = (brotli: BrotliInstance, data: string): CompressionRestoration => {
+    // Un URI-encode the data
+    data = decodeURIComponent(data.replace('?p=', ''));
+    console.debug('Going to decompress', data);
+
     // Decode the brotli-compressed string
     const compressedBuffer = Buffer.from(data, 'base64');
     const decompressedBuffer = brotli.decompress(compressedBuffer);

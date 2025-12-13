@@ -33,9 +33,8 @@ const App = () => {
 
     // Sample data for the list box
     const [candidates, setCandidates] = useState<CandidateItem[]>([
-        {uuid: crypto.randomUUID(), text: "First Option"},
-        {uuid: crypto.randomUUID(), text: "Second Option"},
-        {uuid: crypto.randomUUID(), text: "Third Option"},
+        {uuid: crypto.randomUUID(), text: "Heads"},
+        {uuid: crypto.randomUUID(), text: "Tails"},
     ]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
