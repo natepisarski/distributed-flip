@@ -6,6 +6,7 @@ interface ShareLinkProps {
     candidates: CandidateItem[];
     targetDatetime: Date;
     brotli: BrotliInstance;
+    enableCompetition: () => void|null;
 }
 
 /**
@@ -13,9 +14,10 @@ interface ShareLinkProps {
  * @param brotli
  * @param candidates
  * @param targetDatetime
+ * @param enableCompetition Enables the competition. This should set the p queryString
  * @constructor
  */
-export const ShareLink = ({brotli, candidates, targetDatetime}: ShareLinkProps) => {
+export const ShareLink = ({brotli, candidates, targetDatetime, enableCompetition}: ShareLinkProps) => {
     const compressedParams = compress(brotli, targetDatetime, candidates);
     const queryString = `?p=${encodeURIComponent(compressedParams)}`;
 
@@ -29,6 +31,8 @@ export const ShareLink = ({brotli, candidates, targetDatetime}: ShareLinkProps) 
         navigator.clipboard.writeText(linkText);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+
+        // By clicking on the Share link, you are also signaling your intent to finish the list; so we allow the competition to start now
     }
 
     const copiedClasses = ` w-32 px-4 py-2 rounded-lg transition-colors ${copied ? 'bg-green-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`;

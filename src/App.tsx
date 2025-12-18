@@ -1,5 +1,4 @@
 import React, {useState, useEffect, useRef} from 'react';
-import logo from './logo.svg';
 import './App.css';
 import {List} from "./components/List";
 import {addHours, formatDistance, isBefore} from "date-fns";
@@ -7,6 +6,11 @@ import brotliPromise from 'brotli-wasm';
 import {compress, restore} from "./business/compression-restore";
 import {ShareLink} from "./components/ShareLink";
 import {format} from "date-fns/format";
+import {fetchBeaconByTime, HttpCachingChain, HttpChainClient} from "drand-client";
+import {read} from "node:fs";
+
+// Drand Mainnet Chain Hash
+const CHAIN_HASH = '8990e7a9aaed2f3b507c95208331d5dd0c99db496340696d090954a4bbe93481';
 
 export interface CandidateItem {
     uuid: string;
@@ -31,6 +35,9 @@ const App = () => {
     const targetDatetimeDate = new Date(targetUtcDatetime);
 
     const [inputValue, setInputValue] = useState<string>("");
+    const [winnerUuid, setWinnerUuid] = useState<string | null>(null);
+    const [isLoadingResult, setIsLoadingResult] = useState<boolean>(false);
+    const [competitionMode, setCompetitionMode] = useState<boolean>(false);
 
     // Sample data for the list box
     const [candidates, setCandidates] = useState<CandidateItem[]>([
@@ -56,8 +63,10 @@ const App = () => {
 
     // Auto-scroll effect
     useEffect(() => {
-        listEndRef.current?.scrollIntoView({behavior: "smooth"});
-    }, [candidates]);
+        if (!winnerUuid) {
+            listEndRef.current?.scrollIntoView({behavior: "smooth"});
+        }
+    }, [candidates, winnerUuid]);
 
     const [brotli, setBrotli] = useState<BrotliInstance | null>(null);
 
@@ -70,28 +79,85 @@ const App = () => {
         loadBrotli();
     }, []);
 
+    // Restoration Effect
     useEffect(() => {
         if (brotli && compressedParam) {
             const restoration = restore(brotli, window.location.search)
             setTargetUtcDatetime(restoration.targetDatetime);
             setCandidates(restoration.candidates);
+            // Reset winner if URL changes
+            setWinnerUuid(null);
         }
     }, [brotli, compressedParam]);
+
+    useEffect(() => {
+        // If we already have a winner, stop checking
+        if (winnerUuid) {
+            return;
+        }
+
+        // Checks to see if the target time has passed; if it has
+        const checkTimeAndFetch = async () => {
+            const now = Date.now();
+            const target = new Date(targetUtcDatetime).getTime();
+
+            // Only fetch if the time has passed
+            if (now >= target) {
+                setIsLoadingResult(true);
+                try {
+                    const options = {
+                        disableBeaconVerification: true,
+                        noCache: false,
+                    }
+
+                    const chain = new HttpCachingChain('https://api.drand.sh', options)
+                    const client = new HttpChainClient(chain, options)
+
+                    // Fetch the beacon for the target time
+                    const theBeacon = await fetchBeaconByTime(client, target);
+
+                    // Convert randomness hex to BigInt
+                    const randomnessVal = BigInt(`0x${theBeacon.randomness}`);
+
+                    // Standard Modulo to pick a winner
+                    // We cast to Number for the index access, safe for list lengths < 2^53
+                    const winnerIndex = Number(randomnessVal % BigInt(candidates.length));
+
+                    setWinnerUuid(candidates[winnerIndex].uuid);
+                } catch (e) {
+                    console.error("Failed to fetch drand beacon:", e);
+                    // Optional: Add retry logic here if needed
+                } finally {
+                    setIsLoadingResult(false);
+                }
+            }
+        };
+
+        // Run immediately on mount/update to catch if we loaded a past link
+        checkTimeAndFetch();
+
+        // Poll every 10 seconds to catch the transition "live"
+        const intervalId = setInterval(checkTimeAndFetch, 10000);
+
+        return () => clearInterval(intervalId);
+    }, [targetUtcDatetime, winnerUuid, candidates]);
+    // --- DRAND LOGIC END ---
 
     const onRemove = (uuid: string) => {
         setCandidates(candidates.filter(log => log.uuid !== uuid));
     }
 
-    // const remaining = candidates.length;
     const atMaxCandidates = candidates.length >= MAX_CANDIDATES;
 
-    const disabledClasses = atMaxCandidates
+    const disabledClasses = atMaxCandidates || winnerUuid
         ? 'opacity-50 cursor-not-allowed'
         : '';
 
     const [datePickerShown, setDatePickerShown] = useState<boolean>(false);
 
-    const toggleDatePicker = () => setDatePickerShown(true);
+    const toggleDatePicker = () => {
+        if (!winnerUuid) setDatePickerShown(true);
+    };
 
     if (! brotli) {
         return <div>Loading compression module...</div>;
@@ -108,11 +174,13 @@ const App = () => {
         if (!inputValue) {
             const resetDate = addHours(new Date(), 1);
             setTargetUtcDatetime(resetDate.toISOString());
+            setWinnerUuid(null); // Reset winner if date changes
             return;
         }
 
         const newDate = new Date(inputValue);
         setTargetUtcDatetime(newDate.toISOString());
+        setWinnerUuid(null); // Reset winner if date changes
     };
 
     const handleDatepickerKeydown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -134,18 +202,31 @@ const App = () => {
         />
     ) : (
         <span
-            className={'text-green-500 cursor-pointer hover:text-green-600 hover:underline'}
+            className={`text-green-500 ${winnerUuid ? '' : 'cursor-pointer hover:text-green-600 hover:underline'}`}
             title={targetDatetimeTooltip}
             onClick={toggleDatePicker}
         >
-        {` ${targetDatetimeDisplayText}`}
+        {winnerUuid ? ` ${targetDatetimeTooltip}` : ` ${targetDatetimeDisplayText}`}
     </span>
     );
 
-    // Every minute, we should see if the target time has passed. If it has (and we haven't already discovered the winner)
-    // we figure out who won.
+    // Prevents the list from being edited, and switches to a view more suitable for viewing results rather than editing them.
+    const enableCompetition = () => {
+        setCompetitionMode(true);
+    };
 
-    const isChosenAlready = isBefore(targetUtcDatetime, Date.now());
+    const readonly = competitionMode || !!winnerUuid;
+
+    let dateTimeText = null;
+    if (readonly) {
+        if (winnerUuid) {
+            dateTimeText = `Result determined at`;
+        } else {
+            dateTimeText = `Waiting for result at`;
+        }
+    } else {
+        dateTimeText = `A random item will be chosen ${datePickerWord} ${dateComponent}`;
+    }
 
     return (
         <div className="min-h-screen w-full bg-gray-900 flex flex-col justify-center items-center p-4">
@@ -158,11 +239,14 @@ const App = () => {
                 <div className={'flex flex-row w-full mb-4 items-center justify-center text-white'}>
                     <div className={'flex flex-col'}>
                         <div className={'flex flex-row justify-center'}>
-                            <p className={'text-white font-bold text-xl'}>List Selector</p>
+                            <p className={'text-white font-bold text-xl'}>
+                                {readonly ? "Result Determined" : "List Selector"}
+                            </p>
                         </div>
-                        <div className={'flex flex-row text-gray-300 text-xl'}>
+                        <div className={'flex flex-row text-gray-300 text-xl justify-center'}>
                             <span>
-                                A random item will be chosen {datePickerWord}
+                                {/* Start fixing stuff here. It's all kinds of borked with competitionMode, needs serious refactoring. */}
+                                {dateTimeText
                                 {dateComponent}
                             </span>
                         </div>
@@ -173,26 +257,34 @@ const App = () => {
                     candidates={candidates}
                     listEndRef={listEndRef}
                     onRemove={onRemove}
+                    winnerUuid={winnerUuid}
                 />
 
-                <div className="relative">
-                    <input
-                        type="text"
-                        className={`w-full bg-gray-800 text-white text-xl p-4 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-lg transition-all ${disabledClasses}`}
-                        placeholder={`Add Item (${candidates.length} / ${MAX_CANDIDATES})`}
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        autoFocus
-                        disabled={atMaxCandidates}
-                    />
-                    <div
-                        className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm hidden sm:block">
-                        Press Enter ↵
+                {/* Only show input if no winner yet */}
+                {!winnerUuid && (
+                    <div className="relative">
+                        <input
+                            type="text"
+                            className={`w-full bg-gray-800 text-white text-xl p-4 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-lg transition-all ${disabledClasses}`}
+                            placeholder={`Add Item (${candidates.length} / ${MAX_CANDIDATES})`}
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            autoFocus
+                            disabled={atMaxCandidates || !!winnerUuid}
+                        />
+                        <div
+                            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm hidden sm:block">
+                            Press Enter ↵
+                        </div>
                     </div>
-                </div>
+                )}
 
-                <ShareLink brotli={brotli} candidates={candidates} targetDatetime={targetDatetimeDate} />
+                {isLoadingResult && (
+                    <div className="text-blue-400 text-center animate-pulse">Contacting the League of Entropy...</div>
+                )}
+
+                <ShareLink brotli={brotli} candidates={candidates} targetDatetime={targetDatetimeDate} enableCompetition={enableCompetition} />
             </div>
         </div>
     );
