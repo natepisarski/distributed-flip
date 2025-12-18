@@ -14,6 +14,7 @@
     "brotli-wasm": "^3.0.1",
     "buffer": "^6.0.3",
     "date-fns": "^4.1.0",
+    "drand-client": "^1.4.2",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-scripts": "5.0.1",

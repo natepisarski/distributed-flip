@@ -2,7 +2,7 @@ import React, {useState, useEffect, useRef} from 'react';
 import logo from './logo.svg';
 import './App.css';
 import {List} from "./components/List";
-import {addHours, formatDistance} from "date-fns";
+import {addHours, formatDistance, isBefore} from "date-fns";
 import brotliPromise from 'brotli-wasm';
 import {compress, restore} from "./business/compression-restore";
 import {ShareLink} from "./components/ShareLink";
@@ -141,6 +141,11 @@ const App = () => {
         {` ${targetDatetimeDisplayText}`}
     </span>
     );
+
+    // Every minute, we should see if the target time has passed. If it has (and we haven't already discovered the winner)
+    // we figure out who won.
+
+    const isChosenAlready = isBefore(targetUtcDatetime, Date.now());
 
     return (
         <div className="min-h-screen w-full bg-gray-900 flex flex-col justify-center items-center p-4">
