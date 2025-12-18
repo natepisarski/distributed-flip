@@ -2,10 +2,11 @@ import React, {useState, useEffect, useRef} from 'react';
 import logo from './logo.svg';
 import './App.css';
 import {List} from "./components/List";
-import {formatDistance} from "date-fns";
+import {addHours, formatDistance} from "date-fns";
 import brotliPromise from 'brotli-wasm';
 import {compress, restore} from "./business/compression-restore";
 import {ShareLink} from "./components/ShareLink";
+import {format} from "date-fns/format";
 
 export interface CandidateItem {
     uuid: string;
@@ -88,9 +89,58 @@ const App = () => {
         ? 'opacity-50 cursor-not-allowed'
         : '';
 
+    const [datePickerShown, setDatePickerShown] = useState<boolean>(false);
+
+    const toggleDatePicker = () => setDatePickerShown(true);
+
     if (! brotli) {
         return <div>Loading compression module...</div>;
     }
+
+    const datePickerWord = datePickerShown ? 'at' : 'in';
+
+    const nowLocal = format(new Date(), "yyyy-MM-dd'T'HH:mm");
+
+    const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+        const inputValue = e.target.value;
+
+        // If they use the built-in "Clear" button we just reset it to now + 1 hour
+        if (!inputValue) {
+            const resetDate = addHours(new Date(), 1);
+            setTargetUtcDatetime(resetDate.toISOString());
+            return;
+        }
+
+        const newDate = new Date(inputValue);
+        setTargetUtcDatetime(newDate.toISOString());
+    };
+
+    const handleDatepickerKeydown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+        if (e.key === 'Escape' || e.key === 'Enter') {
+            setDatePickerShown(false);
+        }
+    }
+
+    const dateComponent = datePickerShown ? (
+        <input
+            type="datetime-local"
+            className="ml-2 p-1 rounded bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            value={targetUtcDatetime ? format(new Date(targetUtcDatetime), "yyyy-MM-dd'T'HH:mm") : ''}
+            min={nowLocal}
+            onChange={handleDateChange}
+            onKeyDown={handleDatepickerKeydown}
+            onBlur={() => setDatePickerShown(false)}
+            autoFocus
+        />
+    ) : (
+        <span
+            className={'text-green-500 cursor-pointer hover:text-green-600 hover:underline'}
+            title={targetDatetimeTooltip}
+            onClick={toggleDatePicker}
+        >
+        {` ${targetDatetimeDisplayText}`}
+    </span>
+    );
 
     return (
         <div className="min-h-screen w-full bg-gray-900 flex flex-col justify-center items-center p-4">
@@ -107,9 +157,8 @@ const App = () => {
                         </div>
                         <div className={'flex flex-row text-gray-300 text-xl'}>
                             <span>
-                                A random item will be chosen in <span
-                                className={'text-green-500 cursor-pointer hover:text-green-600'}
-                                title={targetDatetimeTooltip}>{targetDatetimeDisplayText}</span>.
+                                A random item will be chosen {datePickerWord}
+                                {dateComponent}
                             </span>
                         </div>
                     </div>
