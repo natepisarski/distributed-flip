@@ -8,6 +8,7 @@ import {ShareLink} from "./components/ShareLink";
 import {format} from "date-fns/format";
 import {fetchBeaconByTime, HttpCachingChain, HttpChainClient} from "drand-client";
 import {read} from "node:fs";
+import {identity} from "./business/functions";
 
 // Drand Mainnet Chain Hash
 const CHAIN_HASH = '8990e7a9aaed2f3b507c95208331d5dd0c99db496340696d090954a4bbe93481';
@@ -34,10 +35,24 @@ const App = () => {
     let targetDatetimeDisplayText = formatDistance(targetUtcDatetime, new Date());
     const targetDatetimeDate = new Date(targetUtcDatetime);
 
+    // If the p parameter is present, we are in "competition mode" where we're either displaying a result or waiting for a result.
+    const isParameterPresent = compressedParam !== null;
+
     const [inputValue, setInputValue] = useState<string>("");
     const [winnerUuid, setWinnerUuid] = useState<string | null>(null);
     const [isLoadingResult, setIsLoadingResult] = useState<boolean>(false);
-    const [competitionMode, setCompetitionMode] = useState<boolean>(false);
+    const [competitionMode, setCompetitionMode] = useState<boolean>(isParameterPresent);
+
+    let modeEmoji = "🎲";
+    if (competitionMode) {
+        if (winnerUuid) {
+            modeEmoji = "🏅";
+        } else {
+            modeEmoji = "⏳";
+        }
+    } else {
+        modeEmoji = "📝";
+    }
 
     // Sample data for the list box
     const [candidates, setCandidates] = useState<CandidateItem[]>([
@@ -196,18 +211,29 @@ const App = () => {
 
     const readonly = competitionMode || !!winnerUuid;
 
+    console.debug('Winner UUID:', winnerUuid);
+
+
     let dateTimeText = null;
+    let dateDisplayClasses: string[]|string = ['text-green-500'];
+    let dateOnclickHandler = () => {};
+
     if (readonly) {
         targetDatetimeDisplayText = format(new Date(targetUtcDatetime), "PPpp");
         if (winnerUuid) {
             dateTimeText = `Result determined at`;
+            dateDisplayClasses = [...dateDisplayClasses, 'font-bold'];
         } else {
             dateTimeText = `Waiting for result at`;
+            dateDisplayClasses = [...dateDisplayClasses, 'italic'];
         }
     } else {
         dateTimeText = `A random item will be chosen ${datePickerWord}`;
+        dateDisplayClasses = [...dateDisplayClasses, 'cursor-pointer', 'hover:text-green-600', 'hover:underline'];
+        dateOnclickHandler = toggleDatePicker;
     }
 
+    dateDisplayClasses = dateDisplayClasses.join(' ');
 
     const dateComponent = datePickerShown ? (
         <input
@@ -227,9 +253,9 @@ const App = () => {
                 {` ${dateTimeText} `}
             </span>
             <span
-                className={`text-green-500 ${winnerUuid ? '' : 'cursor-pointer hover:text-green-600 hover:underline'}`}
+                className={dateDisplayClasses}
                 title={targetDatetimeTooltip}
-                onClick={toggleDatePicker}
+                onClick={dateOnclickHandler}
             >
         {targetDatetimeDisplayText}
     </span>
@@ -241,14 +267,14 @@ const App = () => {
             <div className="w-full max-w-6xl flex flex-col gap-2">
                 <div className={'flex flex-row w-full items-center justify-center'}>
                     <h1 className="text-4xl font-bold text-white text-center tracking-wider">
-                        Distributed Flipper
+                        {modeEmoji} Distributed Flipper
                     </h1>
                 </div>
                 <div className={'flex flex-row w-full mb-4 items-center justify-center text-white'}>
                     <div className={'flex flex-col'}>
                         <div className={'flex flex-row justify-center'}>
                             <p className={'text-white font-bold text-xl'}>
-                                {readonly ? "Result Determined" : "List Selector"}
+                                {winnerUuid ? "Result Determined" : "List Selector"}
                             </p>
                         </div>
                         <div className={'flex flex-row text-gray-300 text-xl justify-center'}>
@@ -264,8 +290,8 @@ const App = () => {
                     winnerUuid={winnerUuid}
                 />
 
-                {/* Only show input if no winner yet */}
-                {!winnerUuid && (
+                {/* Only show input if we're not in readonly mode */}
+                {!readonly && (
                     <div className="relative">
                         <input
                             type="text"
