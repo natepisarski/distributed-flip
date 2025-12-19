@@ -290,7 +290,7 @@ const App = () => {
         <div className={"flex flex-row w-full items-center justify-center"}>
           <a href={"/"}>
             <h1 className="text-4xl font-bold text-white text-center tracking-wider cursor-pointer hover:underline hover:text-blue-400">
-              {modeEmoji} Distributed Flipper
+              {modeEmoji} Pickr
             </h1>
           </a>
         </div>
