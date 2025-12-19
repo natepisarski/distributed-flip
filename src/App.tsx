@@ -18,7 +18,7 @@ export interface CandidateItem {
     text: string;
 }
 
-const MAX_CANDIDATES = 4;
+const MAX_CANDIDATES = 10;
 
 export type BrotliInstance = {
     compress: (buf: Uint8Array, options?: any) => Uint8Array;
@@ -110,6 +110,10 @@ const App = () => {
         if (winnerUuid) {
             return;
         }
+        // If the list is still being edited, don't try to select a winner yet
+        if (!competitionMode) {
+            return;
+        }
 
         // Checks to see if the target time has passed; if it has
         const checkTimeAndFetch = async () => {
@@ -155,7 +159,7 @@ const App = () => {
         const intervalId = setInterval(checkTimeAndFetch, 10000);
 
         return () => clearInterval(intervalId);
-    }, [targetUtcDatetime, winnerUuid, candidates]);
+    }, [targetUtcDatetime, winnerUuid, candidates, competitionMode]);
     // --- DRAND LOGIC END ---
 
     const onRemove = (uuid: string) => {
@@ -215,8 +219,9 @@ const App = () => {
 
 
     let dateTimeText = null;
-    let dateDisplayClasses: string[]|string = ['text-green-500'];
-    let dateOnclickHandler = () => {};
+    let dateDisplayClasses: string[] | string = ['text-green-500'];
+    let dateOnclickHandler = () => {
+    };
 
     if (readonly) {
         targetDatetimeDisplayText = format(new Date(targetUtcDatetime), "PPpp");
@@ -266,9 +271,11 @@ const App = () => {
         <div className="min-h-screen w-full bg-gray-900 flex flex-col justify-center items-center p-4">
             <div className="w-full max-w-6xl flex flex-col gap-2">
                 <div className={'flex flex-row w-full items-center justify-center'}>
-                    <h1 className="text-4xl font-bold text-white text-center tracking-wider">
-                        {modeEmoji} Distributed Flipper
-                    </h1>
+                    <a href={'/'}>
+                        <h1 className="text-4xl font-bold text-white text-center tracking-wider cursor-pointer hover:underline hover:text-blue-400">
+                            {modeEmoji} Distributed Flipper
+                        </h1>
+                    </a>
                 </div>
                 <div className={'flex flex-row w-full mb-4 items-center justify-center text-white'}>
                     <div className={'flex flex-col'}>
@@ -288,6 +295,7 @@ const App = () => {
                     listEndRef={listEndRef}
                     onRemove={onRemove}
                     winnerUuid={winnerUuid}
+                    readonly={readonly}
                 />
 
                 {/* Only show input if we're not in readonly mode */}

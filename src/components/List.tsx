@@ -6,9 +6,10 @@ interface ListProps {
     listEndRef: React.RefObject<HTMLDivElement|null>;
     onRemove: (uuid: string) => void;
     winnerUuid: string | null;
+    readonly: boolean;
 }
 
-export const List = ({ candidates, listEndRef, onRemove, winnerUuid }: ListProps) => {
+export const List = ({ candidates, listEndRef, onRemove, winnerUuid, readonly }: ListProps) => {
 
     // Auto-scroll to the winner when revealed
     useEffect(() => {
@@ -36,7 +37,7 @@ export const List = ({ candidates, listEndRef, onRemove, winnerUuid }: ListProps
                                 className={`font-mono text-sm p-2 rounded transition-all duration-500 ${winnerClass} ${opacityClass} flex flex-row items-center`}
                             >
                                 {/* Only show delete button if no winner is chosen yet */}
-                                {!winnerUuid && (
+                                {!readonly && (
                                     <span
                                         className="text-red-500 mr-2 cursor-pointer hover:underline"
                                         onClick={() => onRemove(option.uuid)}
