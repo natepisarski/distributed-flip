@@ -31,7 +31,7 @@ const App = () => {
     const defaultTargetUtcDatetime = new Date(Date.now() + 60 * 60 * 1000); // 1 hour in the future
     const [targetUtcDatetime, setTargetUtcDatetime] = useState<string>(defaultTargetUtcDatetime.toISOString());
     const targetDatetimeTooltip = new Date(targetUtcDatetime).toLocaleString();
-    const targetDatetimeDisplayText = formatDistance(targetUtcDatetime, new Date());
+    let targetDatetimeDisplayText = formatDistance(targetUtcDatetime, new Date());
     const targetDatetimeDate = new Date(targetUtcDatetime);
 
     const [inputValue, setInputValue] = useState<string>("");
@@ -159,7 +159,7 @@ const App = () => {
         if (!winnerUuid) setDatePickerShown(true);
     };
 
-    if (! brotli) {
+    if (!brotli) {
         return <div>Loading compression module...</div>;
     }
 
@@ -189,6 +189,26 @@ const App = () => {
         }
     }
 
+    // Prevents the list from being edited, and switches to a view more suitable for viewing results rather than editing them.
+    const enableCompetition = () => {
+        setCompetitionMode(true);
+    };
+
+    const readonly = competitionMode || !!winnerUuid;
+
+    let dateTimeText = null;
+    if (readonly) {
+        targetDatetimeDisplayText = format(new Date(targetUtcDatetime), "PPpp");
+        if (winnerUuid) {
+            dateTimeText = `Result determined at`;
+        } else {
+            dateTimeText = `Waiting for result at`;
+        }
+    } else {
+        dateTimeText = `A random item will be chosen ${datePickerWord}`;
+    }
+
+
     const dateComponent = datePickerShown ? (
         <input
             type="datetime-local"
@@ -201,32 +221,20 @@ const App = () => {
             autoFocus
         />
     ) : (
-        <span
-            className={`text-green-500 ${winnerUuid ? '' : 'cursor-pointer hover:text-green-600 hover:underline'}`}
-            title={targetDatetimeTooltip}
-            onClick={toggleDatePicker}
-        >
-        {winnerUuid ? ` ${targetDatetimeTooltip}` : ` ${targetDatetimeDisplayText}`}
+        <>
+            <span className={'mr-1'}>
+                {/* This will be everything before the actual time, like "Will show results at" or "Result determined at"*/}
+                {` ${dateTimeText} `}
+            </span>
+            <span
+                className={`text-green-500 ${winnerUuid ? '' : 'cursor-pointer hover:text-green-600 hover:underline'}`}
+                title={targetDatetimeTooltip}
+                onClick={toggleDatePicker}
+            >
+        {targetDatetimeDisplayText}
     </span>
+        </>
     );
-
-    // Prevents the list from being edited, and switches to a view more suitable for viewing results rather than editing them.
-    const enableCompetition = () => {
-        setCompetitionMode(true);
-    };
-
-    const readonly = competitionMode || !!winnerUuid;
-
-    let dateTimeText = null;
-    if (readonly) {
-        if (winnerUuid) {
-            dateTimeText = `Result determined at`;
-        } else {
-            dateTimeText = `Waiting for result at`;
-        }
-    } else {
-        dateTimeText = `A random item will be chosen ${datePickerWord} ${dateComponent}`;
-    }
 
     return (
         <div className="min-h-screen w-full bg-gray-900 flex flex-col justify-center items-center p-4">
@@ -244,11 +252,7 @@ const App = () => {
                             </p>
                         </div>
                         <div className={'flex flex-row text-gray-300 text-xl justify-center'}>
-                            <span>
-                                {/* Start fixing stuff here. It's all kinds of borked with competitionMode, needs serious refactoring. */}
-                                {dateTimeText
-                                {dateComponent}
-                            </span>
+                            {dateComponent}
                         </div>
                     </div>
                 </div>
@@ -284,7 +288,8 @@ const App = () => {
                     <div className="text-blue-400 text-center animate-pulse">Contacting the League of Entropy...</div>
                 )}
 
-                <ShareLink brotli={brotli} candidates={candidates} targetDatetime={targetDatetimeDate} enableCompetition={enableCompetition} />
+                <ShareLink brotli={brotli} candidates={candidates} targetDatetime={targetDatetimeDate}
+                           enableCompetition={enableCompetition}/>
             </div>
         </div>
     );
