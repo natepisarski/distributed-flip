@@ -25,6 +25,18 @@ export type BrotliInstance = {
     decompress: (buf: Uint8Array) => Uint8Array;
 };
 
+const getModeEmoji = (readonly: boolean, winnerUuid: string | null): string => {
+    if (readonly) {
+        if (winnerUuid) {
+            return "🏅";
+        } else {
+            return "⏳";
+        }
+    } else {
+        return "📝";
+    }
+};
+
 const App = () => {
     // If the querystring contains the 'p' parameter with compressed data, we restore it here.
     const compressedParam = new URLSearchParams(window.location.search).get('p');
@@ -41,20 +53,10 @@ const App = () => {
     const [inputValue, setInputValue] = useState<string>("");
     const [winnerUuid, setWinnerUuid] = useState<string | null>(null);
     const [isLoadingResult, setIsLoadingResult] = useState<boolean>(false);
-    const [competitionMode, setCompetitionMode] = useState<boolean>(isParameterPresent);
+    const [isReadonly, setIsReadonly] = useState<boolean>(isParameterPresent);
 
-    let modeEmoji = "🎲";
-    if (competitionMode) {
-        if (winnerUuid) {
-            modeEmoji = "🏅";
-        } else {
-            modeEmoji = "⏳";
-        }
-    } else {
-        modeEmoji = "📝";
-    }
+    let modeEmoji = getModeEmoji(isReadonly, winnerUuid);
 
-    // Sample data for the list box
     const [candidates, setCandidates] = useState<CandidateItem[]>([
         {uuid: crypto.randomUUID(), text: "Heads"},
         {uuid: crypto.randomUUID(), text: "Tails"},
@@ -76,7 +78,7 @@ const App = () => {
 
     const listEndRef = useRef<HTMLDivElement>(null);
 
-    // Auto-scroll effect
+    // Auto-scroll effect for the candidate list
     useEffect(() => {
         if (!winnerUuid) {
             listEndRef.current?.scrollIntoView({behavior: "smooth"});
@@ -94,7 +96,7 @@ const App = () => {
         loadBrotli();
     }, []);
 
-    // Restoration Effect
+    // Uses Brotli to restore the list and target time from the compressed URL parameter if it exists
     useEffect(() => {
         if (brotli && compressedParam) {
             const restoration = restore(brotli, window.location.search)
@@ -105,13 +107,14 @@ const App = () => {
         }
     }, [brotli, compressedParam]);
 
+    // DRAND Logic - this is what chooses the winner
     useEffect(() => {
         // If we already have a winner, stop checking
         if (winnerUuid) {
             return;
         }
         // If the list is still being edited, don't try to select a winner yet
-        if (!competitionMode) {
+        if (! isReadonly) {
             return;
         }
 
@@ -159,10 +162,10 @@ const App = () => {
         const intervalId = setInterval(checkTimeAndFetch, 10000);
 
         return () => clearInterval(intervalId);
-    }, [targetUtcDatetime, winnerUuid, candidates, competitionMode]);
+    }, [targetUtcDatetime, winnerUuid, candidates, isReadonly]);
     // --- DRAND LOGIC END ---
 
-    const onRemove = (uuid: string) => {
+    const onListRemoveCandidate = (uuid: string) => {
         setCandidates(candidates.filter(log => log.uuid !== uuid));
     }
 
@@ -209,11 +212,11 @@ const App = () => {
     }
 
     // Prevents the list from being edited, and switches to a view more suitable for viewing results rather than editing them.
-    const enableCompetition = () => {
-        setCompetitionMode(true);
+    const makeListReadonly = () => {
+        setIsReadonly(true);
     };
 
-    const readonly = competitionMode || !!winnerUuid;
+    const readonly = isReadonly || !!winnerUuid;
 
     console.debug('Winner UUID:', winnerUuid);
 
@@ -293,7 +296,7 @@ const App = () => {
                 <List
                     candidates={candidates}
                     listEndRef={listEndRef}
-                    onRemove={onRemove}
+                    onRemove={onListRemoveCandidate}
                     winnerUuid={winnerUuid}
                     readonly={readonly}
                 />
@@ -323,7 +326,7 @@ const App = () => {
                 )}
 
                 <ShareLink brotli={brotli} candidates={candidates} targetDatetime={targetDatetimeDate}
-                           enableCompetition={enableCompetition}/>
+                           enableCompetition={makeListReadonly}/>
             </div>
         </div>
     );
