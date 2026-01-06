@@ -22,7 +22,9 @@ export const validateGroupConfig = (
     }
 
     if (maxPerGroup !== null && maxPerGroup * numGroups < numCandidates) {
-        return `Cannot fit ${numCandidates} candidates into ${numGroups} groups with max ${maxPerGroup} per group`;
+        const minimumCandidates = maxPerGroup * numGroups;
+
+        return `At least ${minimumCandidates} candidates required when max per group is set to ${maxPerGroup} with ${numGroups} groups.`;
     }
 
     return null;

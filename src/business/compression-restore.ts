@@ -2,8 +2,9 @@ import {
   BrotliInstance,
   CandidateItem,
   CompressedPayload,
-  GroupsConfig,
+  GroupsConfig, ListConfig,
 } from "../types";
+import {PickrMode} from "../types/enums";
 
 // Legacy format for backwards compatibility
 interface LegacyPayload {
@@ -15,6 +16,7 @@ export interface ListRestoration {
   mode: "list";
   targetDatetime: string;
   candidates: CandidateItem[];
+  config: ListConfig;
 }
 
 /**
@@ -60,17 +62,18 @@ export const restore = (
     text: text,
   }));
 
-  if (isNewFormat && (payload as CompressedPayload).mode === "groups") {
+  // Restores the groups mode data
+  if (isNewFormat && (payload as CompressedPayload).mode === PickrMode.Groups) {
     const groupsPayload = payload as CompressedPayload;
 
     // Reconstruct groups
-    const groups = (groupsPayload.g || []).map((name) => ({
+    const groups = (groupsPayload.g || []).map(name=> ({
       uuid: crypto.randomUUID(),
       name: name,
     }));
 
     return {
-      mode: "groups",
+      mode: PickrMode.Groups,
       targetDatetime: payload.t,
       candidates,
       groups,
@@ -82,9 +85,12 @@ export const restore = (
 
   // Default to list mode (also handles legacy format)
   return {
-    mode: "list",
+    mode: PickrMode.List,
     targetDatetime: payload.t,
     candidates,
+    config: {
+      numberOfWinners: 1
+    }
   };
 };
 
@@ -144,13 +150,4 @@ const compressPayload = (
   );
 
   return base64Encoded;
-};
-
-// Keep the old compress function for backwards compatibility during transition
-export const compress = (
-  brotli: BrotliInstance,
-  targetTime: Date,
-  candidates: CandidateItem[]
-): string => {
-  return compressList(brotli, targetTime, candidates);
 };

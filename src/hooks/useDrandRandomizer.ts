@@ -25,8 +25,7 @@ interface UseDrandRandomizerResult {
 }
 
 /**
- * Hook that fetches randomness from drand and provides both single-winner selection
- * and shuffled ordering for group distribution.
+ * Hook that fetches randomness from drand and provides the end result for each of the modes.
  */
 export const useDrandRandomizer = ({
     targetDatetime,
@@ -42,23 +41,19 @@ export const useDrandRandomizer = ({
     /**
      * Fisher-Yates shuffle using drand randomness as seed.
      * Creates deterministic shuffle from the randomness value.
+     * The items in the array are represented by their indices (0 to count-1) and then we just replace these indices with actual items later.
      */
     const shuffleWithRandomness = useCallback(
         (count: number, randomnessVal: bigint): number[] => {
             const indices = Array.from({ length: count }, (_, i) => i);
 
-            // Use the randomness to seed a deterministic shuffle
-            // We'll use different "slices" of the randomness for each swap
             let currentRandomness = randomnessVal;
 
+            // !!! ABSOLUTE SHENANIGANS !!!
             for (let i = count - 1; i > 0; i--) {
-                // Get a random index from 0 to i
                 const j = Number(currentRandomness % BigInt(i + 1));
-                // Swap
                 [indices[i], indices[j]] = [indices[j], indices[i]];
-                // Advance the randomness (simple hash-like operation)
                 currentRandomness = currentRandomness / BigInt(i + 1);
-                // If we run out of bits, rehash
                 if (currentRandomness === BigInt(0)) {
                     currentRandomness = randomnessVal ^ BigInt(i);
                 }
@@ -71,7 +66,7 @@ export const useDrandRandomizer = ({
 
     useEffect(() => {
         // Reset state when inputs change
-        if (!isActive || itemCount === 0) {
+        if (! isActive || itemCount === 0) {
             return;
         }
 

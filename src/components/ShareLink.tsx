@@ -8,6 +8,7 @@ import {
 } from "../types";
 import { compressList, compressGroups } from "../business/compression-restore";
 import { validateGroupConfig } from "../business/group-distribution";
+import {PickrMode} from "../types/enums";
 
 interface ShareLinkProps {
   brotli: BrotliInstance;
@@ -37,7 +38,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({
 
   // Validate for groups mode
   const groupsValidationError =
-    mode === "groups"
+    mode === PickrMode.Groups
       ? validateGroupConfig(
         groups.length,
         candidates.length,
@@ -45,8 +46,11 @@ export const ShareLink: React.FC<ShareLinkProps> = ({
       )
       : null;
 
+  const isList = mode === PickrMode.List;
+  const isGroups = mode === PickrMode.Groups;
+
   // Can't share if groups mode has validation errors
-  const canShare = mode === "list" || groupsValidationError === null;
+  const canShare = isList || groupsValidationError === null;
 
   // Compress based on mode
   const compressedParams =
