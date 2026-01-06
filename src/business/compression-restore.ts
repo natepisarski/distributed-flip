@@ -17,6 +17,9 @@ export interface ListRestoration {
   candidates: CandidateItem[];
 }
 
+/**
+ * Format for links to Group mode
+ */
 export interface GroupsRestoration {
   mode: "groups";
   targetDatetime: string;
