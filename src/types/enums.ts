@@ -1,4 +1,4 @@
 export enum PickrMode {
-    List = "list",
-    Groups = "groups",
+  List = "list",
+  Groups = "groups",
 }

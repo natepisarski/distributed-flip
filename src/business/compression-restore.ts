@@ -2,9 +2,10 @@ import {
   BrotliInstance,
   CandidateItem,
   CompressedPayload,
-  GroupsConfig, ListConfig,
+  GroupsConfig,
+  ListConfig,
 } from "../types";
-import {PickrMode} from "../types/enums";
+import { PickrMode } from "../types/enums";
 
 // Legacy format for backwards compatibility
 interface LegacyPayload {
@@ -38,7 +39,7 @@ export type CompressionRestoration = ListRestoration | GroupsRestoration;
  */
 export const restore = (
   brotli: BrotliInstance,
-  data: string
+  data: string,
 ): CompressionRestoration => {
   // Un URI-encode the data
   data = decodeURIComponent(data.replace("?p=", ""));
@@ -67,7 +68,7 @@ export const restore = (
     const groupsPayload = payload as CompressedPayload;
 
     // Reconstruct groups
-    const groups = (groupsPayload.g || []).map(name=> ({
+    const groups = (groupsPayload.g || []).map((name) => ({
       uuid: crypto.randomUUID(),
       name: name,
     }));
@@ -89,8 +90,8 @@ export const restore = (
     targetDatetime: payload.t,
     candidates,
     config: {
-      numberOfWinners: 1
-    }
+      numberOfWinners: 1,
+    },
   };
 };
 
@@ -100,7 +101,7 @@ export const restore = (
 export const compressList = (
   brotli: BrotliInstance,
   targetTime: Date,
-  candidates: CandidateItem[]
+  candidates: CandidateItem[],
 ): string => {
   const payload: CompressedPayload = {
     mode: "list",
@@ -119,7 +120,7 @@ export const compressGroups = (
   targetTime: Date,
   candidates: CandidateItem[],
   groups: Array<{ name: string }>,
-  config: GroupsConfig
+  config: GroupsConfig,
 ): string => {
   const payload: CompressedPayload = {
     mode: "groups",
@@ -137,7 +138,7 @@ export const compressGroups = (
  */
 const compressPayload = (
   brotli: BrotliInstance,
-  payload: CompressedPayload
+  payload: CompressedPayload,
 ): string => {
   const jsonString = JSON.stringify(payload);
   const compressedBuffer = brotli.compress(Buffer.from(jsonString), {
@@ -146,7 +147,7 @@ const compressPayload = (
   const base64Encoded = Buffer.from(compressedBuffer).toString("base64");
 
   console.debug(
-    `Compressed Data (original: ${jsonString.length}) (compressed: ${base64Encoded.length})`
+    `Compressed Data (original: ${jsonString.length}) (compressed: ${base64Encoded.length})`,
   );
 
   return base64Encoded;

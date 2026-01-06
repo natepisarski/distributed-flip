@@ -1,7 +1,9 @@
 # [pickr.live](https://pickr.live)
+
 This project allows you to randomly select an item from a list at a future date and time.
 
 It's useful for scenarios like:
+
 - Choosing a restaurant
 - Selecting a movie to watch
 - Giveaway / Raffle drawings

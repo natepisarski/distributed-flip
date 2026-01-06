@@ -8,7 +8,7 @@ import {
 } from "../types";
 import { compressList, compressGroups } from "../business/compression-restore";
 import { validateGroupConfig } from "../business/group-distribution";
-import {PickrMode} from "../types/enums";
+import { PickrMode } from "../types/enums";
 
 interface ShareLinkProps {
   brotli: BrotliInstance;
@@ -40,10 +40,10 @@ export const ShareLink: React.FC<ShareLinkProps> = ({
   const groupsValidationError =
     mode === PickrMode.Groups
       ? validateGroupConfig(
-        groups.length,
-        candidates.length,
-        groupsConfig.maxPerGroup
-      )
+          groups.length,
+          candidates.length,
+          groupsConfig.maxPerGroup,
+        )
       : null;
 
   const isList = mode === PickrMode.List;
@@ -56,7 +56,13 @@ export const ShareLink: React.FC<ShareLinkProps> = ({
   const compressedParams =
     mode === "list"
       ? compressList(brotli, targetDatetime, candidates)
-      : compressGroups(brotli, targetDatetime, candidates, groups, groupsConfig);
+      : compressGroups(
+          brotli,
+          targetDatetime,
+          candidates,
+          groups,
+          groupsConfig,
+        );
 
   const queryString = `?p=${encodeURIComponent(compressedParams)}`;
   const linkText = `${window.location.origin}/${queryString}`;
@@ -87,17 +93,19 @@ export const ShareLink: React.FC<ShareLinkProps> = ({
     ? "opacity-50 cursor-not-allowed bg-gray-600"
     : "";
 
-  const copyClasses = `w-28 px-4 py-2 rounded-lg transition-colors ${copied
+  const copyClasses = `w-28 px-4 py-2 rounded-lg transition-colors ${
+    copied
       ? "bg-green-600 text-white"
       : canShare
         ? "bg-blue-600 text-white hover:bg-blue-700"
         : buttonDisabledClasses
-    }`;
+  }`;
 
-  const goClasses = `w-24 px-4 py-2 rounded-lg transition-colors ${canShare
+  const goClasses = `w-24 px-4 py-2 rounded-lg transition-colors ${
+    canShare
       ? "bg-green-600 text-white hover:bg-green-700"
       : buttonDisabledClasses
-    }`;
+  }`;
 
   const copiedEmoji = copied ? "✔️" : "📋";
   const copiedText = copied ? "Copied!" : "Copy";
@@ -119,8 +127,9 @@ export const ShareLink: React.FC<ShareLinkProps> = ({
           type="text"
           readOnly
           value={canShare ? linkText : "Fix validation errors to generate link"}
-          className={`flex-grow bg-gray-900 text-white p-2 rounded-lg font-mono text-sm ${!canShare ? "opacity-50" : ""
-            }`}
+          className={`flex-grow bg-gray-900 text-white p-2 rounded-lg font-mono text-sm ${
+            !canShare ? "opacity-50" : ""
+          }`}
           onFocus={(e) => e.target.select()}
         />
 

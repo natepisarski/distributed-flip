@@ -1,149 +1,143 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-    fetchBeaconByTime,
-    HttpCachingChain,
-    HttpChainClient,
+  fetchBeaconByTime,
+  HttpCachingChain,
+  HttpChainClient,
 } from "drand-client";
 
 interface UseDrandRandomizerOptions {
-    targetDatetime: string;
-    itemCount: number;
-    isActive: boolean;
+  targetDatetime: string;
+  itemCount: number;
+  isActive: boolean;
 }
 
 interface UseDrandRandomizerResult {
-    // The winning index (for list mode - single selection)
-    winnerIndex: number | null;
-    // Shuffled indices (for groups mode - distribution)
-    shuffledIndices: number[] | null;
-    // Raw randomness value for custom processing
-    randomness: bigint | null;
-    // Loading state
-    isLoading: boolean;
-    // Error if any
-    error: Error | null;
+  // The winning index (for list mode - single selection)
+  winnerIndex: number | null;
+  // Shuffled indices (for groups mode - distribution)
+  shuffledIndices: number[] | null;
+  // Raw randomness value for custom processing
+  randomness: bigint | null;
+  // Loading state
+  isLoading: boolean;
+  // Error if any
+  error: Error | null;
 }
 
 /**
  * Hook that fetches randomness from drand and provides the end result for each of the modes.
  */
 export const useDrandRandomizer = ({
-    targetDatetime,
-    itemCount,
-    isActive,
+  targetDatetime,
+  itemCount,
+  isActive,
 }: UseDrandRandomizerOptions): UseDrandRandomizerResult => {
-    const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
-    const [shuffledIndices, setShuffledIndices] = useState<number[] | null>(null);
-    const [randomness, setRandomness] = useState<bigint | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<Error | null>(null);
+  const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
+  const [shuffledIndices, setShuffledIndices] = useState<number[] | null>(null);
+  const [randomness, setRandomness] = useState<bigint | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-    /**
-     * Fisher-Yates shuffle using drand randomness as seed.
-     * Creates deterministic shuffle from the randomness value.
-     * The items in the array are represented by their indices (0 to count-1) and then we just replace these indices with actual items later.
-     */
-    const shuffleWithRandomness = useCallback(
-        (count: number, randomnessVal: bigint): number[] => {
-            const indices = Array.from({ length: count }, (_, i) => i);
+  /**
+   * Fisher-Yates shuffle using drand randomness as seed.
+   * Creates deterministic shuffle from the randomness value.
+   * The items in the array are represented by their indices (0 to count-1) and then we just replace these indices with actual items later.
+   */
+  const shuffleWithRandomness = useCallback(
+    (count: number, randomnessVal: bigint): number[] => {
+      const indices = Array.from({ length: count }, (_, i) => i);
 
-            let currentRandomness = randomnessVal;
+      let currentRandomness = randomnessVal;
 
-            // !!! ABSOLUTE SHENANIGANS !!!
-            for (let i = count - 1; i > 0; i--) {
-                const j = Number(currentRandomness % BigInt(i + 1));
-                [indices[i], indices[j]] = [indices[j], indices[i]];
-                currentRandomness = currentRandomness / BigInt(i + 1);
-                if (currentRandomness === BigInt(0)) {
-                    currentRandomness = randomnessVal ^ BigInt(i);
-                }
-            }
-
-            return indices;
-        },
-        []
-    );
-
-    useEffect(() => {
-        // Reset state when inputs change
-        if (! isActive || itemCount === 0) {
-            return;
+      // !!! ABSOLUTE SHENANIGANS !!!
+      for (let i = count - 1; i > 0; i--) {
+        const j = Number(currentRandomness % BigInt(i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+        currentRandomness = currentRandomness / BigInt(i + 1);
+        if (currentRandomness === BigInt(0)) {
+          currentRandomness = randomnessVal ^ BigInt(i);
         }
+      }
 
-        const checkTimeAndFetch = async () => {
-            const now = Date.now();
-            const target = new Date(targetDatetime).getTime();
+      return indices;
+    },
+    [],
+  );
 
-            // Only fetch if the time has passed
-            if (now < target) {
-                return;
-            }
+  useEffect(() => {
+    // Reset state when inputs change
+    if (!isActive || itemCount === 0) {
+      return;
+    }
 
-            // Already have result
-            if (winnerIndex !== null) {
-                return;
-            }
+    const checkTimeAndFetch = async () => {
+      const now = Date.now();
+      const target = new Date(targetDatetime).getTime();
 
-            setIsLoading(true);
-            setError(null);
+      // Only fetch if the time has passed
+      if (now < target) {
+        return;
+      }
 
-            try {
-                const options = {
-                    disableBeaconVerification: true,
-                    noCache: false,
-                };
+      // Already have result
+      if (winnerIndex !== null) {
+        return;
+      }
 
-                const chain = new HttpCachingChain("https://api.drand.sh", options);
-                const client = new HttpChainClient(chain, options);
+      setIsLoading(true);
+      setError(null);
 
-                const theBeacon = await fetchBeaconByTime(client, target);
-                const randomnessVal = BigInt(`0x${theBeacon.randomness}`);
-
-                setRandomness(randomnessVal);
-
-                // Calculate winner index (for list mode)
-                const winner = Number(randomnessVal % BigInt(itemCount));
-                setWinnerIndex(winner);
-
-                // Calculate shuffled indices (for groups mode)
-                const shuffled = shuffleWithRandomness(itemCount, randomnessVal);
-                setShuffledIndices(shuffled);
-            } catch (e) {
-                console.error("Failed to fetch drand beacon:", e);
-                setError(e instanceof Error ? e : new Error("Unknown error"));
-            } finally {
-                setIsLoading(false);
-            }
+      try {
+        const options = {
+          disableBeaconVerification: true,
+          noCache: false,
         };
 
-        // Run immediately
-        checkTimeAndFetch();
+        const chain = new HttpCachingChain("https://api.drand.sh", options);
+        const client = new HttpChainClient(chain, options);
 
-        // Poll every 10 seconds
-        const intervalId = setInterval(checkTimeAndFetch, 10000);
+        const theBeacon = await fetchBeaconByTime(client, target);
+        const randomnessVal = BigInt(`0x${theBeacon.randomness}`);
 
-        return () => clearInterval(intervalId);
-    }, [
-        targetDatetime,
-        itemCount,
-        isActive,
-        winnerIndex,
-        shuffleWithRandomness,
-    ]);
+        setRandomness(randomnessVal);
 
-    // Reset when target datetime changes
-    useEffect(() => {
-        setWinnerIndex(null);
-        setShuffledIndices(null);
-        setRandomness(null);
-        setError(null);
-    }, [targetDatetime]);
+        // Calculate winner index (for list mode)
+        const winner = Number(randomnessVal % BigInt(itemCount));
+        setWinnerIndex(winner);
 
-    return {
-        winnerIndex,
-        shuffledIndices,
-        randomness,
-        isLoading,
-        error,
+        // Calculate shuffled indices (for groups mode)
+        const shuffled = shuffleWithRandomness(itemCount, randomnessVal);
+        setShuffledIndices(shuffled);
+      } catch (e) {
+        console.error("Failed to fetch drand beacon:", e);
+        setError(e instanceof Error ? e : new Error("Unknown error"));
+      } finally {
+        setIsLoading(false);
+      }
     };
+
+    // Run immediately
+    checkTimeAndFetch();
+
+    // Poll every 10 seconds
+    const intervalId = setInterval(checkTimeAndFetch, 10000);
+
+    return () => clearInterval(intervalId);
+  }, [targetDatetime, itemCount, isActive, winnerIndex, shuffleWithRandomness]);
+
+  // Reset when target datetime changes
+  useEffect(() => {
+    setWinnerIndex(null);
+    setShuffledIndices(null);
+    setRandomness(null);
+    setError(null);
+  }, [targetDatetime]);
+
+  return {
+    winnerIndex,
+    shuffledIndices,
+    randomness,
+    isLoading,
+    error,
+  };
 };

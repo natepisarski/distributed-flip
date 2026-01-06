@@ -1,11 +1,6 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
-import {
-  TabMode,
-  CandidateItem,
-  GroupItem,
-  GroupsConfig,
-} from "./types";
+import { TabMode, CandidateItem, GroupItem, GroupsConfig } from "./types";
 import { useBrotli } from "./hooks/useBrotli";
 import { restore } from "./business/compression-restore";
 import { ShareLink } from "./components/ShareLink";
@@ -16,7 +11,7 @@ import { GroupsTab } from "./components/groups/GroupsTab";
 const getModeEmoji = (
   readonly: boolean,
   hasResult: boolean,
-  mode: TabMode
+  mode: TabMode,
 ): string => {
   if (readonly) {
     if (hasResult) {
@@ -44,7 +39,7 @@ const App = () => {
   // Target datetime (shared between tabs)
   const defaultTargetUtcDatetime = new Date(Date.now() + 60 * 60 * 1000);
   const [targetUtcDatetime, setTargetUtcDatetime] = useState<string>(
-    defaultTargetUtcDatetime.toISOString()
+    defaultTargetUtcDatetime.toISOString(),
   );
 
   // List tab state
