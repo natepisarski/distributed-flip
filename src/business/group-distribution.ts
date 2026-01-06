@@ -22,9 +22,8 @@ export const validateGroupConfig = (
     }
 
     if (maxPerGroup !== null && maxPerGroup * numGroups < numCandidates) {
-        const minimumCandidates = maxPerGroup * numGroups;
-
-        return `At least ${minimumCandidates} candidates required when max per group is set to ${maxPerGroup} with ${numGroups} groups.`;
+        const maximumNumberOfCandidates = maxPerGroup * numGroups;
+        return `With max per group set to ${maxPerGroup} and ${numGroups} groups, you can only have up to ${maximumNumberOfCandidates} candidates`;
     }
 
     return null;
@@ -58,7 +57,7 @@ export const distributeToGroups = (
     }
 
     // Get candidates in shuffled order
-    const shuffledCandidates = shuffledIndices.map((i) => candidates[i]);
+    const shuffledCandidates = shuffledIndices.map(i => candidates[i]);
 
     // Distribute candidates round-robin style, respecting maxPerGroup if set
     let groupIndex = 0;
