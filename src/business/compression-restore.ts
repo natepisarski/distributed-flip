@@ -1,23 +1,39 @@
-import { BrotliInstance, CandidateItem } from "../App";
+import {
+  BrotliInstance,
+  CandidateItem,
+  CompressedPayload,
+  GroupsConfig,
+} from "../types";
 
-export interface CompressionRestoration {
-  candidates: Array<CandidateItem>;
-  targetDatetime: string;
+// Legacy format for backwards compatibility
+interface LegacyPayload {
+  t: string;
+  c: string[];
 }
 
+export interface ListRestoration {
+  mode: "list";
+  targetDatetime: string;
+  candidates: CandidateItem[];
+}
+
+export interface GroupsRestoration {
+  mode: "groups";
+  targetDatetime: string;
+  candidates: CandidateItem[];
+  groups: Array<{ uuid: string; name: string }>;
+  config: GroupsConfig;
+}
+
+export type CompressionRestoration = ListRestoration | GroupsRestoration;
+
 /**
- * Given the compressed data string, we restore the original list of CandidateItems. The data string is a base64-encoded
- * Brotli-compressed JSON object with the following format:
- * {
- *     t: <target_datetime_utc_iso_8601_string>,
- *     c: [<candidate_1_string>, <candidate_2_string>, etc.]
- * }
- * @param brotli
- * @param data
+ * Given the compressed data string, we restore the original state.
+ * Supports both legacy format (list only) and new format (list/groups).
  */
 export const restore = (
   brotli: BrotliInstance,
-  data: string,
+  data: string
 ): CompressionRestoration => {
   // Un URI-encode the data
   data = decodeURIComponent(data.replace("?p=", ""));
@@ -30,36 +46,90 @@ export const restore = (
   const jsonString = utf8Decoder.decode(decompressedBuffer);
 
   // Parse the JSON
-  const payload = JSON.parse(jsonString) as { t: string; c: Array<string> };
+  const payload = JSON.parse(jsonString) as CompressedPayload | LegacyPayload;
+
+  // Check if this is the new format or legacy format
+  const isNewFormat = "mode" in payload;
 
   // Reconstruct CandidateItems
-  const candidates: Array<CandidateItem> = payload.c.map((text) => ({
+  const candidates: CandidateItem[] = payload.c.map((text) => ({
     uuid: crypto.randomUUID(),
     text: text,
   }));
 
+  if (isNewFormat && (payload as CompressedPayload).mode === "groups") {
+    const groupsPayload = payload as CompressedPayload;
+
+    // Reconstruct groups
+    const groups = (groupsPayload.g || []).map((name) => ({
+      uuid: crypto.randomUUID(),
+      name: name,
+    }));
+
+    return {
+      mode: "groups",
+      targetDatetime: payload.t,
+      candidates,
+      groups,
+      config: {
+        maxPerGroup: groupsPayload.m ?? null,
+      },
+    };
+  }
+
+  // Default to list mode (also handles legacy format)
   return {
-    candidates,
+    mode: "list",
     targetDatetime: payload.t,
+    candidates,
   };
 };
 
 /**
- * Compress the target time and candidates into a base64-encoded Brotli-compressed JSON string.
- * @param brotli
- * @param targetTime
- * @param candidates
+ * Compress the list mode state into a base64-encoded Brotli-compressed JSON string.
  */
-export const compress = (
+export const compressList = (
   brotli: BrotliInstance,
   targetTime: Date,
-  candidates: Array<CandidateItem>,
+  candidates: CandidateItem[]
 ): string => {
-  const candidateArray = candidates.map((c) => c.text);
-  const payload = {
+  const payload: CompressedPayload = {
+    mode: "list",
     t: targetTime.toISOString(),
-    c: candidateArray,
+    c: candidates.map((c) => c.text),
   };
+
+  return compressPayload(brotli, payload);
+};
+
+/**
+ * Compress the groups mode state into a base64-encoded Brotli-compressed JSON string.
+ */
+export const compressGroups = (
+  brotli: BrotliInstance,
+  targetTime: Date,
+  candidates: CandidateItem[],
+  groups: Array<{ name: string }>,
+  config: GroupsConfig
+): string => {
+  const payload: CompressedPayload = {
+    mode: "groups",
+    t: targetTime.toISOString(),
+    c: candidates.map((c) => c.text),
+    g: groups.map((g) => g.name),
+    m: config.maxPerGroup,
+  };
+
+  return compressPayload(brotli, payload);
+};
+
+/**
+ * Internal helper to compress any payload
+ */
+const compressPayload = (
+  brotli: BrotliInstance,
+  payload: CompressedPayload
+): string => {
   const jsonString = JSON.stringify(payload);
   const compressedBuffer = brotli.compress(Buffer.from(jsonString), {
     quality: 20,
@@ -67,8 +137,17 @@ export const compress = (
   const base64Encoded = Buffer.from(compressedBuffer).toString("base64");
 
   console.debug(
-    `Compressed Data (original: ${jsonString.length}) (compressed: ${base64Encoded.length})`,
+    `Compressed Data (original: ${jsonString.length}) (compressed: ${base64Encoded.length})`
   );
 
   return base64Encoded;
+};
+
+// Keep the old compress function for backwards compatibility during transition
+export const compress = (
+  brotli: BrotliInstance,
+  targetTime: Date,
+  candidates: CandidateItem[]
+): string => {
+  return compressList(brotli, targetTime, candidates);
 };

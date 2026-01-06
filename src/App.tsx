@@ -1,39 +1,26 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import "./App.css";
-import { List } from "./components/List";
-import { addHours, formatDistance, isBefore } from "date-fns";
-import brotliPromise from "brotli-wasm";
-import { compress, restore } from "./business/compression-restore";
-import { ShareLink } from "./components/ShareLink";
-import { format } from "date-fns/format";
 import {
-  fetchBeaconByTime,
-  HttpCachingChain,
-  HttpChainClient,
-} from "drand-client";
-import { read } from "node:fs";
-import { identity } from "./business/functions";
+  TabMode,
+  CandidateItem,
+  GroupItem,
+  GroupsConfig,
+} from "./types";
+import { useBrotli } from "./hooks/useBrotli";
+import { restore } from "./business/compression-restore";
+import { ShareLink } from "./components/ShareLink";
+import { TabContainer } from "./components/tabs/TabContainer";
+import { ListTab } from "./components/list/ListTab";
+import { GroupsTab } from "./components/groups/GroupsTab";
 
-// Drand Mainnet Chain Hash
-const CHAIN_HASH =
-  "8990e7a9aaed2f3b507c95208331d5dd0c99db496340696d090954a4bbe93481";
-
-export interface CandidateItem {
-  uuid: string;
-  text: string;
-}
-
-const MAX_CANDIDATES = 10;
-
-export type BrotliInstance = {
-  compress: (buf: Uint8Array, options?: any) => Uint8Array;
-  decompress: (buf: Uint8Array) => Uint8Array;
-};
-
-const getModeEmoji = (readonly: boolean, winnerUuid: string | null): string => {
+const getModeEmoji = (
+  readonly: boolean,
+  hasResult: boolean,
+  mode: TabMode
+): string => {
   if (readonly) {
-    if (winnerUuid) {
-      return "🏅";
+    if (hasResult) {
+      return mode === "list" ? "🏅" : "👥";
     } else {
       return "⏳";
     }
@@ -43,330 +30,151 @@ const getModeEmoji = (readonly: boolean, winnerUuid: string | null): string => {
 };
 
 const App = () => {
-  // If the querystring contains the 'p' parameter with compressed data, we restore it here.
+  // Load Brotli compression
+  const brotli = useBrotli();
+
+  // Check for compressed URL parameter
   const compressedParam = new URLSearchParams(window.location.search).get("p");
-
-  const defaultTargetUtcDatetime = new Date(Date.now() + 60 * 60 * 1000); // 1 hour in the future
-  const [targetUtcDatetime, setTargetUtcDatetime] = useState<string>(
-    defaultTargetUtcDatetime.toISOString(),
-  );
-  const targetDatetimeTooltip = new Date(targetUtcDatetime).toLocaleString();
-  let targetDatetimeDisplayText = formatDistance(targetUtcDatetime, new Date());
-  const targetDatetimeDate = new Date(targetUtcDatetime);
-
-  // If the p parameter is present, we are in "competition mode" where we're either displaying a result or waiting for a result.
   const isParameterPresent = compressedParam !== null;
 
-  const [inputValue, setInputValue] = useState<string>("");
-  const [winnerUuid, setWinnerUuid] = useState<string | null>(null);
-  const [isLoadingResult, setIsLoadingResult] = useState<boolean>(false);
+  // Core state
+  const [activeTab, setActiveTab] = useState<TabMode>("list");
   const [isReadonly, setIsReadonly] = useState<boolean>(isParameterPresent);
 
-  let modeEmoji = getModeEmoji(isReadonly, winnerUuid);
+  // Target datetime (shared between tabs)
+  const defaultTargetUtcDatetime = new Date(Date.now() + 60 * 60 * 1000);
+  const [targetUtcDatetime, setTargetUtcDatetime] = useState<string>(
+    defaultTargetUtcDatetime.toISOString()
+  );
 
-  const [candidates, setCandidates] = useState<CandidateItem[]>([
+  // List tab state
+  const [listCandidates, setListCandidates] = useState<CandidateItem[]>([
     { uuid: crypto.randomUUID(), text: "Heads" },
     { uuid: crypto.randomUUID(), text: "Tails" },
   ]);
+  const [winnerUuid, setWinnerUuid] = useState<string | null>(null);
+  const [isLoadingResult, setIsLoadingResult] = useState<boolean>(false);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && inputValue.trim()) {
-      setCandidates([
-        ...candidates,
-        {
-          uuid: crypto.randomUUID(),
-          text: inputValue,
-        },
-      ]);
-      setInputValue("");
-    }
-  };
+  // Groups tab state
+  const [groupsCandidates, setGroupsCandidates] = useState<CandidateItem[]>([]);
+  const [groups, setGroups] = useState<GroupItem[]>([]);
+  const [groupsConfig, setGroupsConfig] = useState<GroupsConfig>({
+    maxPerGroup: null,
+  });
 
-  const listEndRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll effect for the candidate list
-  useEffect(() => {
-    if (!winnerUuid) {
-      listEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [candidates, winnerUuid]);
-
-  const [brotli, setBrotli] = useState<BrotliInstance | null>(null);
-
-  useEffect(() => {
-    const loadBrotli = async () => {
-      const instance = await brotliPromise;
-      setBrotli(instance);
-    };
-
-    loadBrotli();
-  }, []);
-
-  // Uses Brotli to restore the list and target time from the compressed URL parameter if it exists
+  // Restore state from URL
   useEffect(() => {
     if (brotli && compressedParam) {
       const restoration = restore(brotli, window.location.search);
+
       setTargetUtcDatetime(restoration.targetDatetime);
-      setCandidates(restoration.candidates);
-      // Reset winner if URL changes
-      setWinnerUuid(null);
+      setActiveTab(restoration.mode);
+
+      if (restoration.mode === "list") {
+        setListCandidates(restoration.candidates);
+        setWinnerUuid(null);
+      } else {
+        setGroupsCandidates(restoration.candidates);
+        setGroups(restoration.groups);
+        setGroupsConfig(restoration.config);
+      }
     }
   }, [brotli, compressedParam]);
 
-  // DRAND Logic - this is what chooses the winner
-  useEffect(() => {
-    // If we already have a winner, stop checking
-    if (winnerUuid) {
-      return;
-    }
-    // If the list is still being edited, don't try to select a winner yet
-    if (!isReadonly) {
-      return;
-    }
-
-    // Checks to see if the target time has passed; if it has
-    const checkTimeAndFetch = async () => {
-      const now = Date.now();
-      const target = new Date(targetUtcDatetime).getTime();
-
-      // Only fetch if the time has passed
-      if (now >= target) {
-        setIsLoadingResult(true);
-        try {
-          const options = {
-            disableBeaconVerification: true,
-            noCache: false,
-          };
-
-          const chain = new HttpCachingChain("https://api.drand.sh", options);
-          const client = new HttpChainClient(chain, options);
-
-          // Fetch the beacon for the target time
-          const theBeacon = await fetchBeaconByTime(client, target);
-
-          // Convert randomness hex to BigInt
-          const randomnessVal = BigInt(`0x${theBeacon.randomness}`);
-
-          // Standard Modulo to pick a winner
-          // We cast to Number for the index access, safe for list lengths < 2^53
-          const winnerIndex = Number(randomnessVal % BigInt(candidates.length));
-
-          setWinnerUuid(candidates[winnerIndex].uuid);
-        } catch (e) {
-          console.error("Failed to fetch drand beacon:", e);
-          // Optional: Add retry logic here if needed
-        } finally {
-          setIsLoadingResult(false);
-        }
-      }
-    };
-
-    // Run immediately on mount/update to catch if we loaded a past link
-    checkTimeAndFetch();
-
-    // Poll every 10 seconds to catch the transition "live"
-    const intervalId = setInterval(checkTimeAndFetch, 10000);
-
-    return () => clearInterval(intervalId);
-  }, [targetUtcDatetime, winnerUuid, candidates, isReadonly]);
-  // --- DRAND LOGIC END ---
-
-  const onListRemoveCandidate = (uuid: string) => {
-    setCandidates(candidates.filter((log) => log.uuid !== uuid));
-  };
-
-  const atMaxCandidates = candidates.length >= MAX_CANDIDATES;
-
-  const disabledClasses =
-    atMaxCandidates || winnerUuid ? "opacity-50 cursor-not-allowed" : "";
-
-  const [datePickerShown, setDatePickerShown] = useState<boolean>(false);
-  const [dateError, setDateError] = useState<boolean>(false);
-
-  // Clear date error after 2 seconds
-  useEffect(() => {
-    if (dateError) {
-      const timeout = setTimeout(() => setDateError(false), 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [dateError]);
-
-  const toggleDatePicker = () => {
-    if (!winnerUuid) setDatePickerShown(true);
-  };
-
+  // Loading state
   if (!brotli) {
-    return <div>Loading compression module...</div>;
+    return (
+      <div className="min-h-screen w-full bg-gray-900 flex justify-center items-center">
+        <div className="text-white text-xl">Loading compression module...</div>
+      </div>
+    );
   }
 
-  const datePickerWord = datePickerShown ? "at" : "in";
+  // Determine display mode
+  const hasListResult = !!winnerUuid;
+  const hasGroupsResult = false; // Will be determined by GroupsTab internally
+  const hasResult = activeTab === "list" ? hasListResult : hasGroupsResult;
+  const modeEmoji = getModeEmoji(isReadonly, hasResult, activeTab);
 
-  const nowLocal = format(new Date(), "yyyy-MM-dd'T'HH:mm");
-
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const inputValue = e.target.value;
-
-    // If they use the built-in "Clear" button we just reset it to now + 1 hour
-    if (!inputValue) {
-      const resetDate = addHours(new Date(), 1);
-      setTargetUtcDatetime(resetDate.toISOString());
-      setWinnerUuid(null); // Reset winner if date changes
-      return;
-    }
-
-    const newDate = new Date(inputValue);
-
-    // Validate that the selected date is not in the past
-    if (isBefore(newDate, new Date())) {
-      setDateError(true);
-      return; // Don't update the date if it's in the past
-    }
-
-    setTargetUtcDatetime(newDate.toISOString());
-    setWinnerUuid(null); // Reset winner if date changes
-  };
-
-  const handleDatepickerKeydown = (
-    e: React.KeyboardEvent<HTMLInputElement>,
-  ): void => {
-    if (e.key === "Escape" || e.key === "Enter") {
-      setDatePickerShown(false);
-    }
-  };
-
-  // Prevents the list from being edited, and switches to a view more suitable for viewing results rather than editing them.
-  const makeListReadonly = () => {
+  // Enable competition mode
+  const makeReadonly = () => {
     setIsReadonly(true);
   };
 
-  const readonly = isReadonly || !!winnerUuid;
-
-  console.debug("Winner UUID:", winnerUuid);
-
-  let dateTimeText = null;
-  let dateDisplayClasses: string[] | string = dateError ? ["text-red-500", "animate-pulse", "transition-colors"] : ["text-green-500"];
-  let dateOnclickHandler = () => { };
-
-  if (readonly) {
-    targetDatetimeDisplayText = format(new Date(targetUtcDatetime), "PPpp");
-    if (winnerUuid) {
-      dateTimeText = `Result determined at`;
-      dateDisplayClasses = [...dateDisplayClasses, "font-bold"];
-    } else {
-      dateTimeText = `Waiting for result at`;
-      dateDisplayClasses = [...dateDisplayClasses, "italic"];
+  // Handle tab change (only when not readonly)
+  const handleTabChange = (tab: TabMode) => {
+    if (!isReadonly) {
+      setActiveTab(tab);
+      // Reset winner when switching tabs in edit mode
+      setWinnerUuid(null);
     }
-  } else {
-    dateTimeText = `A random item will be chosen ${datePickerWord}`;
-    dateDisplayClasses = [
-      ...dateDisplayClasses,
-      "cursor-pointer",
-      "hover:text-green-600",
-      "hover:underline",
-    ];
-    dateOnclickHandler = toggleDatePicker;
-  }
+  };
 
-  dateDisplayClasses = dateDisplayClasses.join(" ");
+  // Handle datetime change (resets results)
+  const handleDatetimeChange = (datetime: string) => {
+    setTargetUtcDatetime(datetime);
+    setWinnerUuid(null);
+  };
 
-  const dateComponent = datePickerShown ? (
-    <input
-      type="datetime-local"
-      className="ml-2 p-1 rounded bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-      value={
-        targetUtcDatetime
-          ? format(new Date(targetUtcDatetime), "yyyy-MM-dd'T'HH:mm")
-          : ""
-      }
-      min={nowLocal}
-      onChange={handleDateChange}
-      onKeyDown={handleDatepickerKeydown}
-      onBlur={() => setDatePickerShown(false)}
-      autoFocus
-    />
-  ) : (
-    <>
-      <span className={"mr-1"}>
-        {/* This will be everything before the actual time, like "Will show results at" or "Result determined at"*/}
-        {` ${dateTimeText} `}
-      </span>
-      <span
-        className={dateDisplayClasses}
-        title={targetDatetimeTooltip}
-        onClick={dateOnclickHandler}
-      >
-        {targetDatetimeDisplayText}
-      </span>
-    </>
-  );
+  // Get current candidates for ShareLink
+  const currentCandidates =
+    activeTab === "list" ? listCandidates : groupsCandidates;
 
   return (
     <div className="min-h-screen w-full bg-gray-900 flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-6xl flex flex-col gap-2">
-        <div className={"flex flex-row w-full items-center justify-center"}>
-          <a href={"/"}>
+        {/* Header */}
+        <div className="flex flex-row w-full items-center justify-center">
+          <a href="/">
             <h1 className="text-4xl font-bold text-white text-center tracking-wider cursor-pointer hover:underline hover:text-blue-400">
               {modeEmoji} Pickr
             </h1>
           </a>
         </div>
-        <div
-          className={
-            "flex flex-row w-full mb-4 items-center justify-center text-white"
-          }
+
+        {/* Tab Container */}
+        <TabContainer
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          readonly={isReadonly}
         >
-          <div className={"flex flex-col"}>
-            <div className={"flex flex-row justify-center"}>
-              <p className={"text-white font-bold text-xl"}>
-                {winnerUuid ? "Result Determined" : "List Selector"}
-              </p>
-            </div>
-            <div
-              className={"flex flex-row text-gray-300 text-xl justify-center"}
-            >
-              {dateComponent}
-            </div>
-          </div>
-        </div>
-
-        <List
-          candidates={candidates}
-          listEndRef={listEndRef}
-          onRemove={onListRemoveCandidate}
-          winnerUuid={winnerUuid}
-          readonly={readonly}
-        />
-
-        {/* Only show input if we're not in readonly mode */}
-        {!readonly && (
-          <div className="relative">
-            <input
-              type="text"
-              className={`w-full bg-gray-800 text-white text-xl p-4 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-lg transition-all ${disabledClasses}`}
-              placeholder={`Add Item (${candidates.length} / ${MAX_CANDIDATES})`}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              autoFocus
-              disabled={atMaxCandidates || !!winnerUuid}
+          {activeTab === "list" ? (
+            <ListTab
+              candidates={listCandidates}
+              setCandidates={setListCandidates}
+              targetUtcDatetime={targetUtcDatetime}
+              setTargetUtcDatetime={handleDatetimeChange}
+              readonly={isReadonly}
+              isLoadingResult={isLoadingResult}
+              setIsLoadingResult={setIsLoadingResult}
+              winnerUuid={winnerUuid}
+              setWinnerUuid={setWinnerUuid}
             />
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm hidden sm:block">
-              Press Enter ↵
-            </div>
-          </div>
-        )}
+          ) : (
+            <GroupsTab
+              candidates={groupsCandidates}
+              setCandidates={setGroupsCandidates}
+              groups={groups}
+              setGroups={setGroups}
+              config={groupsConfig}
+              setConfig={setGroupsConfig}
+              targetUtcDatetime={targetUtcDatetime}
+              setTargetUtcDatetime={handleDatetimeChange}
+              readonly={isReadonly}
+            />
+          )}
+        </TabContainer>
 
-        {isLoadingResult && (
-          <div className="text-blue-400 text-center animate-pulse">
-            Contacting the League of Entropy...
-          </div>
-        )}
-
+        {/* Share Link */}
         <ShareLink
           brotli={brotli}
-          candidates={candidates}
-          targetDatetime={targetDatetimeDate}
-          enableCompetition={makeListReadonly}
+          mode={activeTab}
+          candidates={currentCandidates}
+          targetDatetime={new Date(targetUtcDatetime)}
+          enableCompetition={makeReadonly}
+          groups={groups}
+          groupsConfig={groupsConfig}
+          readonly={isReadonly}
         />
       </div>
     </div>

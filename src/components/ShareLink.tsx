@@ -1,46 +1,100 @@
-import { BrotliInstance, CandidateItem } from "../App";
-import { compress } from "../business/compression-restore";
 import React, { useState } from "react";
+import {
+  BrotliInstance,
+  CandidateItem,
+  TabMode,
+  GroupItem,
+  GroupsConfig,
+} from "../types";
+import { compressList, compressGroups } from "../business/compression-restore";
+import { validateGroupConfig } from "../business/group-distribution";
 
 interface ShareLinkProps {
+  brotli: BrotliInstance;
+  mode: TabMode;
   candidates: CandidateItem[];
   targetDatetime: Date;
-  brotli: BrotliInstance;
-  enableCompetition: () => void | null;
+  enableCompetition: () => void;
+  groups?: GroupItem[];
+  groupsConfig?: GroupsConfig;
+  readonly?: boolean;
 }
 
 /**
- * Component that just continuously shows the shareable link with a "Copy to Clipboard" button
- * @param brotli
- * @param candidates
- * @param targetDatetime
- * @param enableCompetition Enables the competition. This should set the p queryString
- * @constructor
+ * Component that shows the shareable link with Copy and Go buttons
  */
-export const ShareLink = ({
+export const ShareLink: React.FC<ShareLinkProps> = ({
   brotli,
+  mode,
   candidates,
   targetDatetime,
   enableCompetition,
-}: ShareLinkProps) => {
-  const compressedParams = compress(brotli, targetDatetime, candidates);
-  const queryString = `?p=${encodeURIComponent(compressedParams)}`;
-
-  const linkText = `${window.location.origin}/${queryString}`;
-
+  groups = [],
+  groupsConfig = { maxPerGroup: null },
+  readonly = false,
+}) => {
   const [copied, setCopied] = useState(false);
 
+  // Validate for groups mode
+  const groupsValidationError =
+    mode === "groups"
+      ? validateGroupConfig(
+        groups.length,
+        candidates.length,
+        groupsConfig.maxPerGroup
+      )
+      : null;
+
+  // Can't share if groups mode has validation errors
+  const canShare = mode === "list" || groupsValidationError === null;
+
+  // Compress based on mode
+  const compressedParams =
+    mode === "list"
+      ? compressList(brotli, targetDatetime, candidates)
+      : compressGroups(brotli, targetDatetime, candidates, groups, groupsConfig);
+
+  const queryString = `?p=${encodeURIComponent(compressedParams)}`;
+  const linkText = `${window.location.origin}/${queryString}`;
+
+  // Copy just copies the link - does NOT enter competition mode
   const onCopyClick = () => {
+    if (!canShare) return;
+
     console.debug(`Copied to Clipboard: ${linkText}`);
 
     navigator.clipboard.writeText(linkText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-
-    // By clicking on the Share link, you are also signaling your intent to finish the list; so we allow the competition to start now
   };
 
-  const copiedClasses = ` w-32 px-4 py-2 rounded-lg transition-colors ${copied ? "bg-green-600 text-white" : "bg-blue-600 text-white hover:bg-blue-700"}`;
+  // Go button enters competition/readonly mode and updates the URL
+  const onGoClick = () => {
+    if (!canShare) {
+      return;
+    }
+
+    window.location.href = linkText;
+
+    enableCompetition();
+  };
+
+  const buttonDisabledClasses = !canShare
+    ? "opacity-50 cursor-not-allowed bg-gray-600"
+    : "";
+
+  const copyClasses = `w-28 px-4 py-2 rounded-lg transition-colors ${copied
+      ? "bg-green-600 text-white"
+      : canShare
+        ? "bg-blue-600 text-white hover:bg-blue-700"
+        : buttonDisabledClasses
+    }`;
+
+  const goClasses = `w-24 px-4 py-2 rounded-lg transition-colors ${canShare
+      ? "bg-green-600 text-white hover:bg-green-700"
+      : buttonDisabledClasses
+    }`;
+
   const copiedEmoji = copied ? "✔️" : "📋";
   const copiedText = copied ? "Copied!" : "Copy";
 
@@ -48,25 +102,50 @@ export const ShareLink = ({
     <div className="mt-4 p-4 bg-gray-800 border border-gray-700 rounded-lg shadow-lg">
       <p className="text-white mb-2 font-bold">Shareable Link</p>
 
-      <div className="flex flex-row w-full items-center gap-4">
+      {/* Validation warning for groups */}
+      {groupsValidationError && mode === "groups" && (
+        <div className="mb-3 text-yellow-400 text-sm">
+          ⚠️ {groupsValidationError} - Fix to enable sharing
+        </div>
+      )}
+
+      <div className="flex flex-row w-full items-center gap-3">
         {/* Input grows to fill available space */}
         <input
           type="text"
           readOnly
-          value={linkText}
-          className="flex-grow bg-gray-900 text-white p-2 rounded-lg font-mono text-sm"
+          value={canShare ? linkText : "Fix validation errors to generate link"}
+          className={`flex-grow bg-gray-900 text-white p-2 rounded-lg font-mono text-sm ${!canShare ? "opacity-50" : ""
+            }`}
           onFocus={(e) => e.target.select()}
         />
 
-        {/* Button sits naturally on the right */}
-        <button className={copiedClasses} onClick={onCopyClick}>
-          <div className={"flex flex-row"}>
-            <div className={"flex flex-col"}>{copiedEmoji}</div>
-            <div className={"flex flex-col justify-center w-full"}>
-              {copiedText}
-            </div>
+        {/* Copy button */}
+        <button
+          className={copyClasses}
+          onClick={onCopyClick}
+          disabled={!canShare}
+        >
+          <div className="flex flex-row items-center justify-center gap-1">
+            <span>{copiedEmoji}</span>
+            <span>{copiedText}</span>
           </div>
         </button>
+
+        {/* Go button - only show when not already in readonly mode */}
+        {!readonly && (
+          <button
+            className={goClasses}
+            onClick={onGoClick}
+            disabled={!canShare}
+            title="Start the competition and wait for results"
+          >
+            <div className="flex flex-row items-center justify-center gap-1">
+              <span>🚀</span>
+              <span>Go!</span>
+            </div>
+          </button>
+        )}
       </div>
     </div>
   );
