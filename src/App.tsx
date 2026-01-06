@@ -181,6 +181,15 @@ const App = () => {
     atMaxCandidates || winnerUuid ? "opacity-50 cursor-not-allowed" : "";
 
   const [datePickerShown, setDatePickerShown] = useState<boolean>(false);
+  const [dateError, setDateError] = useState<boolean>(false);
+
+  // Clear date error after 2 seconds
+  useEffect(() => {
+    if (dateError) {
+      const timeout = setTimeout(() => setDateError(false), 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [dateError]);
 
   const toggleDatePicker = () => {
     if (!winnerUuid) setDatePickerShown(true);
@@ -206,6 +215,13 @@ const App = () => {
     }
 
     const newDate = new Date(inputValue);
+
+    // Validate that the selected date is not in the past
+    if (isBefore(newDate, new Date())) {
+      setDateError(true);
+      return; // Don't update the date if it's in the past
+    }
+
     setTargetUtcDatetime(newDate.toISOString());
     setWinnerUuid(null); // Reset winner if date changes
   };
@@ -228,8 +244,8 @@ const App = () => {
   console.debug("Winner UUID:", winnerUuid);
 
   let dateTimeText = null;
-  let dateDisplayClasses: string[] | string = ["text-green-500"];
-  let dateOnclickHandler = () => {};
+  let dateDisplayClasses: string[] | string = dateError ? ["text-red-500", "animate-pulse", "transition-colors"] : ["text-green-500"];
+  let dateOnclickHandler = () => { };
 
   if (readonly) {
     targetDatetimeDisplayText = format(new Date(targetUtcDatetime), "PPpp");
