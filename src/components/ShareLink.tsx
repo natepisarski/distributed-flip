@@ -5,9 +5,17 @@ import {
   TabMode,
   GroupItem,
   GroupsConfig,
+  AmountConfig,
+  DEFAULT_AMOUNT_MIN,
+  DEFAULT_AMOUNT_MAX,
 } from "../types";
-import { compressList, compressGroups } from "../business/compression-restore";
+import {
+  compressList,
+  compressGroups,
+  compressAmount,
+} from "../business/compression-restore";
 import { validateGroupConfig } from "../business/group-distribution";
+import { validateAmountConfig } from "./amount/AmountTab";
 import { PickrMode } from "../types/enums";
 
 interface ShareLinkProps {
@@ -18,6 +26,7 @@ interface ShareLinkProps {
   enableCompetition: () => void;
   groups?: GroupItem[];
   groupsConfig?: GroupsConfig;
+  amountConfig?: AmountConfig;
   readonly?: boolean;
 }
 
@@ -32,38 +41,53 @@ export const ShareLink: React.FC<ShareLinkProps> = ({
   enableCompetition,
   groups = [],
   groupsConfig = { maxPerGroup: null },
+  amountConfig = { min: DEFAULT_AMOUNT_MIN, max: DEFAULT_AMOUNT_MAX },
   readonly = false,
 }) => {
   const [copied, setCopied] = useState(false);
 
-  // Validate for groups mode
-  const groupsValidationError =
-    mode === PickrMode.Groups
-      ? validateGroupConfig(
-          groups.length,
-          candidates.length,
-          groupsConfig.maxPerGroup,
-        )
-      : null;
-
   const isList = mode === PickrMode.List;
   const isGroups = mode === PickrMode.Groups;
+  const isAmount = mode === PickrMode.Amount;
 
-  // Can't share if groups mode has validation errors
-  const canShare = isList || groupsValidationError === null;
+  // Validate based on mode
+  const groupsValidationError = isGroups
+    ? validateGroupConfig(
+        groups.length,
+        candidates.length,
+        groupsConfig.maxPerGroup,
+      )
+    : null;
+
+  const amountValidationError = isAmount
+    ? validateAmountConfig(amountConfig)
+    : null;
+
+  // Can share if validation passes for the current mode
+  const canShare =
+    isList ||
+    (isGroups && groupsValidationError === null) ||
+    (isAmount && amountValidationError === null);
 
   // Compress based on mode
-  const compressedParams =
-    mode === "list"
-      ? compressList(brotli, targetDatetime, candidates)
-      : compressGroups(
+  const getCompressedParams = (): string => {
+    switch (mode) {
+      case "list":
+        return compressList(brotli, targetDatetime, candidates);
+      case "groups":
+        return compressGroups(
           brotli,
           targetDatetime,
           candidates,
           groups,
           groupsConfig,
         );
+      case "amount":
+        return compressAmount(brotli, targetDatetime, amountConfig);
+    }
+  };
 
+  const compressedParams = getCompressedParams();
   const queryString = `?p=${encodeURIComponent(compressedParams)}`;
   const linkText = `${window.location.origin}/${queryString}`;
 
@@ -110,14 +134,21 @@ export const ShareLink: React.FC<ShareLinkProps> = ({
   const copiedEmoji = copied ? "✔️" : "📋";
   const copiedText = copied ? "Copied!" : "Copy";
 
+  // Get current validation error for display
+  const currentValidationError = isGroups
+    ? groupsValidationError
+    : isAmount
+      ? amountValidationError
+      : null;
+
   return (
     <div className="mt-4 p-4 bg-gray-800 border border-gray-700 rounded-lg shadow-lg">
       <p className="text-white mb-2 font-bold">Shareable Link</p>
 
-      {/* Validation warning for groups */}
-      {groupsValidationError && mode === "groups" && (
+      {/* Validation warning */}
+      {currentValidationError && (
         <div className="mb-3 text-yellow-400 text-sm">
-          ⚠️ {groupsValidationError} - Fix to enable sharing
+          ⚠️ {currentValidationError} - Fix to enable sharing
         </div>
       )}
 

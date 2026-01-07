@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
-import { TabMode, CandidateItem, GroupItem, GroupsConfig } from "./types";
+import {
+  TabMode,
+  CandidateItem,
+  GroupItem,
+  GroupsConfig,
+  AmountConfig,
+  DEFAULT_AMOUNT_MIN,
+  DEFAULT_AMOUNT_MAX,
+} from "./types";
 import { useBrotli } from "./hooks/useBrotli";
 import { restore } from "./business/compression-restore";
 import { ShareLink } from "./components/ShareLink";
 import { TabContainer } from "./components/tabs/TabContainer";
 import { ListTab } from "./components/list/ListTab";
 import { GroupsTab } from "./components/groups/GroupsTab";
+import { AmountTab } from "./components/amount/AmountTab";
 
 const getModeEmoji = (
   readonly: boolean,
@@ -15,13 +24,13 @@ const getModeEmoji = (
 ): string => {
   if (readonly) {
     if (hasResult) {
-      return mode === "list" ? "🏅" : "👥";
-    } else {
-      return "⏳";
+      if (mode === "list") return "🏅";
+      if (mode === "groups") return "👥";
+      if (mode === "amount") return "🔢";
     }
-  } else {
-    return "📝";
+    return "⏳";
   }
+  return "📝";
 };
 
 const App = () => {
@@ -57,6 +66,12 @@ const App = () => {
     maxPerGroup: null,
   });
 
+  // Amount tab state
+  const [amountConfig, setAmountConfig] = useState<AmountConfig>({
+    min: DEFAULT_AMOUNT_MIN,
+    max: DEFAULT_AMOUNT_MAX,
+  });
+
   // Restore state from URL
   useEffect(() => {
     if (brotli && compressedParam) {
@@ -68,10 +83,12 @@ const App = () => {
       if (restoration.mode === "list") {
         setListCandidates(restoration.candidates);
         setWinnerUuid(null);
-      } else {
+      } else if (restoration.mode === "groups") {
         setGroupsCandidates(restoration.candidates);
         setGroups(restoration.groups);
         setGroupsConfig(restoration.config);
+      } else if (restoration.mode === "amount") {
+        setAmountConfig(restoration.config);
       }
     }
   }, [brotli, compressedParam]);
@@ -88,7 +105,13 @@ const App = () => {
   // Determine display mode
   const hasListResult = !!winnerUuid;
   const hasGroupsResult = false; // Will be determined by GroupsTab internally
-  const hasResult = activeTab === "list" ? hasListResult : hasGroupsResult;
+  const hasAmountResult = false; // Will be determined by AmountTab internally
+  const hasResult =
+    activeTab === "list"
+      ? hasListResult
+      : activeTab === "groups"
+        ? hasGroupsResult
+        : hasAmountResult;
   const modeEmoji = getModeEmoji(isReadonly, hasResult, activeTab);
 
   // Enable competition mode
@@ -115,6 +138,50 @@ const App = () => {
   const currentCandidates =
     activeTab === "list" ? listCandidates : groupsCandidates;
 
+  // Render the active tab content
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "list":
+        return (
+          <ListTab
+            candidates={listCandidates}
+            setCandidates={setListCandidates}
+            targetUtcDatetime={targetUtcDatetime}
+            setTargetUtcDatetime={handleDatetimeChange}
+            readonly={isReadonly}
+            isLoadingResult={isLoadingResult}
+            setIsLoadingResult={setIsLoadingResult}
+            winnerUuid={winnerUuid}
+            setWinnerUuid={setWinnerUuid}
+          />
+        );
+      case "groups":
+        return (
+          <GroupsTab
+            candidates={groupsCandidates}
+            setCandidates={setGroupsCandidates}
+            groups={groups}
+            setGroups={setGroups}
+            config={groupsConfig}
+            setConfig={setGroupsConfig}
+            targetUtcDatetime={targetUtcDatetime}
+            setTargetUtcDatetime={handleDatetimeChange}
+            readonly={isReadonly}
+          />
+        );
+      case "amount":
+        return (
+          <AmountTab
+            config={amountConfig}
+            setConfig={setAmountConfig}
+            targetUtcDatetime={targetUtcDatetime}
+            setTargetUtcDatetime={handleDatetimeChange}
+            readonly={isReadonly}
+          />
+        );
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-gray-900 flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-6xl flex flex-col gap-2">
@@ -133,31 +200,7 @@ const App = () => {
           onTabChange={handleTabChange}
           readonly={isReadonly}
         >
-          {activeTab === "list" ? (
-            <ListTab
-              candidates={listCandidates}
-              setCandidates={setListCandidates}
-              targetUtcDatetime={targetUtcDatetime}
-              setTargetUtcDatetime={handleDatetimeChange}
-              readonly={isReadonly}
-              isLoadingResult={isLoadingResult}
-              setIsLoadingResult={setIsLoadingResult}
-              winnerUuid={winnerUuid}
-              setWinnerUuid={setWinnerUuid}
-            />
-          ) : (
-            <GroupsTab
-              candidates={groupsCandidates}
-              setCandidates={setGroupsCandidates}
-              groups={groups}
-              setGroups={setGroups}
-              config={groupsConfig}
-              setConfig={setGroupsConfig}
-              targetUtcDatetime={targetUtcDatetime}
-              setTargetUtcDatetime={handleDatetimeChange}
-              readonly={isReadonly}
-            />
-          )}
+          {renderTabContent()}
         </TabContainer>
 
         {/* Share Link */}
@@ -169,6 +212,7 @@ const App = () => {
           enableCompetition={makeReadonly}
           groups={groups}
           groupsConfig={groupsConfig}
+          amountConfig={amountConfig}
           readonly={isReadonly}
         />
       </div>

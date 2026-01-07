@@ -36,6 +36,13 @@ export const TabContainer: React.FC<TabContainerProps> = ({
           onClick={onTabChange}
           disabled={readonly}
         />
+        <TabButton
+          label="🔢 Amount"
+          tabKey="amount"
+          activeTab={activeTab}
+          onClick={onTabChange}
+          disabled={readonly}
+        />
       </div>
 
       {/* Tab Content */}

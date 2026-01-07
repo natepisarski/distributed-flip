@@ -7,6 +7,10 @@ export const MAX_LIST_CANDIDATES = 10;
 export const MAX_GROUPS = 10;
 export const MAX_GROUP_CANDIDATES = 20;
 
+// Amount mode defaults
+export const DEFAULT_AMOUNT_MIN = 1;
+export const DEFAULT_AMOUNT_MAX = 100;
+
 /**
  * Brotli compression bindings
  */
@@ -35,8 +39,9 @@ export interface GroupItem {
  * Which Mode is currently being used.
  * - "list" = simple list of candidates, one is chosen as a winner
  * - "groups" = candidates are assigned into groups
+ * - "amount" = a random number between min and max
  */
-export type TabMode = "list" | "groups";
+export type TabMode = "list" | "groups" | "amount";
 
 /**
  * Group Configuration Options
@@ -50,6 +55,14 @@ export interface GroupsConfig {
  */
 export interface ListConfig {
   numberOfWinners: number;
+}
+
+/**
+ * Amount Configuration Options
+ */
+export interface AmountConfig {
+  min: number;
+  max: number;
 }
 
 /**
@@ -70,4 +83,7 @@ export interface CompressedPayload {
   g?: string[]; // group names (for groups mode)
   m?: number | null; // max per group (for groups mode)
   nw?: number; // number of winners (for list mode)
+  // Amount mode fields
+  amin?: number; // minimum value
+  amax?: number; // maximum value
 }

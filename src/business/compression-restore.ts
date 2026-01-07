@@ -4,6 +4,9 @@ import {
   CompressedPayload,
   GroupsConfig,
   ListConfig,
+  AmountConfig,
+  DEFAULT_AMOUNT_MIN,
+  DEFAULT_AMOUNT_MAX,
 } from "../types";
 import { PickrMode } from "../types/enums";
 
@@ -31,11 +34,23 @@ export interface GroupsRestoration {
   config: GroupsConfig;
 }
 
-export type CompressionRestoration = ListRestoration | GroupsRestoration;
+/**
+ * Format for links to Amount mode
+ */
+export interface AmountRestoration {
+  mode: "amount";
+  targetDatetime: string;
+  config: AmountConfig;
+}
+
+export type CompressionRestoration =
+  | ListRestoration
+  | GroupsRestoration
+  | AmountRestoration;
 
 /**
  * Given the compressed data string, we restore the original state.
- * Supports both legacy format (list only) and new format (list/groups).
+ * Supports legacy format (list only) and new format (list/groups/amount).
  */
 export const restore = (
   brotli: BrotliInstance,
@@ -57,15 +72,28 @@ export const restore = (
   // Check if this is the new format or legacy format
   const isNewFormat = "mode" in payload;
 
-  // Reconstruct CandidateItems
-  const candidates: CandidateItem[] = payload.c.map((text) => ({
-    uuid: crypto.randomUUID(),
-    text: text,
-  }));
+  // Restores Amount mode
+  if (isNewFormat && (payload as CompressedPayload).mode === PickrMode.Amount) {
+    const amountPayload = payload as CompressedPayload;
+    return {
+      mode: PickrMode.Amount,
+      targetDatetime: payload.t,
+      config: {
+        min: amountPayload.amin ?? DEFAULT_AMOUNT_MIN,
+        max: amountPayload.amax ?? DEFAULT_AMOUNT_MAX,
+      },
+    };
+  }
 
   // Restores the groups mode data
   if (isNewFormat && (payload as CompressedPayload).mode === PickrMode.Groups) {
     const groupsPayload = payload as CompressedPayload;
+
+    // Reconstruct CandidateItems
+    const candidates: CandidateItem[] = payload.c.map((text) => ({
+      uuid: crypto.randomUUID(),
+      text: text,
+    }));
 
     // Reconstruct groups
     const groups = (groupsPayload.g || []).map((name) => ({
@@ -85,6 +113,12 @@ export const restore = (
   }
 
   // Default to list mode (also handles legacy format)
+  // Reconstruct CandidateItems
+  const candidates: CandidateItem[] = payload.c.map((text) => ({
+    uuid: crypto.randomUUID(),
+    text: text,
+  }));
+
   return {
     mode: PickrMode.List,
     targetDatetime: payload.t,
@@ -128,6 +162,25 @@ export const compressGroups = (
     c: candidates.map((c) => c.text),
     g: groups.map((g) => g.name),
     m: config.maxPerGroup,
+  };
+
+  return compressPayload(brotli, payload);
+};
+
+/**
+ * Compress the amount mode state into a base64-encoded Brotli-compressed JSON string.
+ */
+export const compressAmount = (
+  brotli: BrotliInstance,
+  targetTime: Date,
+  config: AmountConfig,
+): string => {
+  const payload: CompressedPayload = {
+    mode: "amount",
+    t: targetTime.toISOString(),
+    c: [], // No candidates for amount mode
+    amin: config.min,
+    amax: config.max,
   };
 
   return compressPayload(brotli, payload);
